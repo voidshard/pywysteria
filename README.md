@@ -1,0 +1,2 @@
+# pywysteria
+Wysteria python client
