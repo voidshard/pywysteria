@@ -24,11 +24,13 @@ class WysteriaConnectionBase(object):
         pass
 
     @abc.abstractmethod
-    def find_collections(self, query):
+    def find_collections(self, query, limit=None, offset=None):
         """Query server & return type appropriate matching results
 
         Args:
             query ([]domain.wysteria.QueryDesc): search query(ies) to execute
+            limit (int): limit number of returned results
+            offset (int): return results starting from some offset
 
         Returns:
             []domain.wysteria.Collection
@@ -39,11 +41,13 @@ class WysteriaConnectionBase(object):
         pass
 
     @abc.abstractmethod
-    def find_items(self, query):
+    def find_items(self, query, limit=None, offset=None):
         """Query server & return type appropriate matching results
 
         Args:
             query ([]domain.wysteria.QueryDesc): search query(ies) to execute
+            limit (int): limit number of returned results
+            offset (int): return results starting from some offset
 
         Returns:
             []domain.wysteria.Item
@@ -54,11 +58,13 @@ class WysteriaConnectionBase(object):
         pass
 
     @abc.abstractmethod
-    def find_versions(self, query):
+    def find_versions(self, query, limit=None, offset=None):
         """Query server & return type appropriate matching results
 
         Args:
             query ([]domain.wysteria.QueryDesc): search query(ies) to execute
+            limit (int): limit number of returned results
+            offset (int): return results starting from some offset
 
         Returns:
             []domain.wysteria.Version
@@ -69,11 +75,13 @@ class WysteriaConnectionBase(object):
         pass
 
     @abc.abstractmethod
-    def find_resources(self, query):
+    def find_resources(self, query, limit=None, offset=None):
         """Query server & return type appropriate matching results
 
         Args:
             query ([]domain.wysteria.QueryDesc): search query(ies) to execute
+            limit (int): limit number of returned results
+            offset (int): return results starting from some offset
 
         Returns:
             []domain.wysteria.Resource
@@ -84,11 +92,13 @@ class WysteriaConnectionBase(object):
         pass
 
     @abc.abstractmethod
-    def find_links(self, query):
+    def find_links(self, query, limit=None, offset=None):
         """Query server & return type appropriate matching results
 
         Args:
             query ([]domain.wysteria.QueryDesc): search query(ies) to execute
+            limit (int): limit number of returned results
+            offset (int): return results starting from some offset
 
         Returns:
             []domain.wysteria.Link

@@ -5,11 +5,11 @@ from wysteria.libs.nats import NatsClient
 
 from abstract_dao import WysteriaConnectionBase
 from wysteria import domain
+from wysteria.constants import DEFAULT_QUERY_LIMIT
 
 
 _DEFAULT_URI = "nats://:@127.0.0.1:4222"  # default localhost, nats port
 _CLIENT_ROUTE = "w.client.%s"  # From a client
-
 
 # wysteria nats protocol routes 
 _KEY_CREATE_COLLECTION = _CLIENT_ROUTE % "cc"
@@ -139,12 +139,14 @@ class WysteriaNatsMiddleware(WysteriaConnectionBase):
         self._conn.request(key, json.dumps(data), box.queue_new_message)
         return json.loads(box.wait_for_message())
 
-    def _generic_find(self, query, key):
+    def _generic_find(self, query, key, limit, offset):
         """Send a find query to the server, return results (if any)
 
         Args:
             query ([domain.QueryDesc]):
             key (str):
+            limit (int):
+            offset (int):
 
         Returns:
             []dict
@@ -152,7 +154,11 @@ class WysteriaNatsMiddleware(WysteriaConnectionBase):
         Raises:
             Exception on server err
         """
-        data = {"query": [q.encode() for q in query]}
+        data = {
+            "query": [q.encode() for q in query],
+            "limit": limit,
+            "offset": offset,
+        }
         reply = self._sync_idempotent_msg(data, key)
 
         err_msg = reply.get("Error")
@@ -161,11 +167,13 @@ class WysteriaNatsMiddleware(WysteriaConnectionBase):
 
         return reply.get("All", [])
 
-    def find_collections(self, query):
+    def find_collections(self, query, limit=DEFAULT_QUERY_LIMIT, offset=0):
         """Query server & return type appropriate matching results
 
         Args:
             query ([]domain.QueryDesc): search query(ies) to execute
+            limit (int): limit number of returned results
+            offset (int): return results starting from some offset
 
         Returns:
             []domain.Collection
@@ -175,15 +183,17 @@ class WysteriaNatsMiddleware(WysteriaConnectionBase):
         """
         return [
             domain.Collection(self, c) for c in self._generic_find(
-                query, _KEY_FIND_COLLECTION
+                query, _KEY_FIND_COLLECTION, limit, offset
             )
         ]
 
-    def find_items(self, query):
+    def find_items(self, query, limit=DEFAULT_QUERY_LIMIT, offset=0):
         """Query server & return type appropriate matching results
 
         Args:
             query ([]domain.QueryDesc): search query(ies) to execute
+            limit (int): limit number of returned results
+            offset (int): return results starting from some offset
 
         Returns:
             []domain.Item
@@ -193,15 +203,17 @@ class WysteriaNatsMiddleware(WysteriaConnectionBase):
         """
         return [
             domain.Item(self, c) for c in self._generic_find(
-                query, _KEY_FIND_ITEM
+                query, _KEY_FIND_ITEM, limit, offset
             )
         ]
     
-    def find_versions(self, query):
+    def find_versions(self, query, limit=DEFAULT_QUERY_LIMIT, offset=0):
         """Query server & return type appropriate matching results
 
         Args:
             query ([]domain.QueryDesc): search query(ies) to execute
+            limit (int): limit number of returned results
+            offset (int): return results starting from some offset
 
         Returns:
             []domain.Version
@@ -211,15 +223,17 @@ class WysteriaNatsMiddleware(WysteriaConnectionBase):
         """
         return [
             domain.Version(self, c) for c in self._generic_find(
-                query, _KEY_FIND_VERSION
+                query, _KEY_FIND_VERSION, limit, offset
             )
         ]
 
-    def find_resources(self, query):
+    def find_resources(self, query, limit=DEFAULT_QUERY_LIMIT, offset=0):
         """Query server & return type appropriate matching results
 
         Args:
             query ([]domain.QueryDesc): search query(ies) to execute
+            limit (int): limit number of returned results
+            offset (int): return results starting from some offset
 
         Returns:
             []domain.Resource
@@ -229,15 +243,17 @@ class WysteriaNatsMiddleware(WysteriaConnectionBase):
         """
         return [
             domain.Resource(self, c) for c in self._generic_find(
-                query, _KEY_FIND_RESOURCE
+                query, _KEY_FIND_RESOURCE, limit, offset
             )
         ]
 
-    def find_links(self, query):
+    def find_links(self, query, limit=DEFAULT_QUERY_LIMIT, offset=0):
         """Query server & return type appropriate matching results
 
         Args:
             query ([]domain.QueryDesc): search query(ies) to execute
+            limit (int): limit number of returned results
+            offset (int): return results starting from some offset
 
         Returns:
             []domain.Link
@@ -247,7 +263,7 @@ class WysteriaNatsMiddleware(WysteriaConnectionBase):
         """
         return [
             domain.Link(self, c) for c in self._generic_find(
-                query, _KEY_FIND_LINK
+                query, _KEY_FIND_LINK, limit, offset
             )
         ]
     

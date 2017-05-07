@@ -1,4 +1,5 @@
 from wysteria.domain import QueryDesc
+from wysteria.constants import DEFAULT_QUERY_LIMIT
 
 
 class Search(object):
@@ -50,7 +51,7 @@ class Search(object):
             .resource_type(resource_type)\
             .resource_location(resource_location)\
             .link_source(link_source)\
-            .link_destination(link_destination)        
+            .link_destination(link_destination)
         
         if not qd.is_valid:
             return False
@@ -67,7 +68,7 @@ class Search(object):
         """
         return len(self._query) > 0
 
-    def _generic_run_query(self, find_func):
+    def _generic_run_query(self, find_func, limit, offset):
         """Run the built query and return matching collections
 
         Returns:
@@ -78,10 +79,14 @@ class Search(object):
         """
         if not self._ready_search():
             return []
-        return find_func(self._query)
+        return find_func(self._query, limit=limit, offset=offset)
 
-    def find_collections(self):
+    def find_collections(self, limit=DEFAULT_QUERY_LIMIT, offset=0):
         """Run the built query and return matching collections
+
+        Args:
+            limit (int): limit returned results
+            offset (int): return results starting from offset
 
         Returns:
             []domain.Collection
@@ -89,10 +94,16 @@ class Search(object):
         Raises:
             wysteria.errors.InvalidQuery if no search terms given
         """
-        return self._generic_run_query(self._conn.find_collections)
+        return self._generic_run_query(
+            self._conn.find_collections, limit, offset
+        )
 
-    def find_items(self):
+    def find_items(self, limit, offset):
         """Run the built query and return matching items
+
+        Args:
+            limit (int): limit returned results
+            offset (int): return results starting from offset
 
         Returns:
             []domain.Item
@@ -100,10 +111,14 @@ class Search(object):
         Raises:
             wysteria.errors.InvalidQuery if no search terms given
         """
-        return self._generic_run_query(self._conn.find_items)
+        return self._generic_run_query(self._conn.find_items, limit, offset)
 
-    def find_versions(self):
+    def find_versions(self, limit, offset):
         """Run the built query and return matching versions
+
+        Args:
+            limit (int): limit returned results
+            offset (int): return results starting from offset
 
         Returns:
             []domain.Version
@@ -111,10 +126,14 @@ class Search(object):
         Raises:
             wysteria.errors.InvalidQuery if no search terms given
         """
-        return self._generic_run_query(self._conn.find_versions)
+        return self._generic_run_query(self._conn.find_versions, limit, offset)
 
-    def find_resources(self):
+    def find_resources(self, limit, offset):
         """Run the built query and return matching resources
+
+        Args:
+            limit (int): limit returned results
+            offset (int): return results starting from offset
 
         Returns:
             []domain.Resource
@@ -122,10 +141,14 @@ class Search(object):
         Raises:
             wysteria.errors.InvalidQuery if no search terms given
         """
-        return self._generic_run_query(self._conn.find_resources)
+        return self._generic_run_query(self._conn.find_resources, limit, offset)
 
-    def find_links(self):
+    def find_links(self, limit, offset):
         """Run the built query and return matching links
+
+        Args:
+            limit (int): limit returned results
+            offset (int): return results starting from offset
 
         Returns:
             []domain.Link
@@ -133,4 +156,4 @@ class Search(object):
         Raises:
             wysteria.errors.InvalidQuery if no search terms given
         """
-        return self._generic_run_query(self._conn.find_links)
+        return self._generic_run_query(self._conn.find_links, limit, offset)
