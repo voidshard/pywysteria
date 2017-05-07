@@ -13,12 +13,18 @@ def main():
         oak = tiles.create_item("tree", "oak")
         oak01 = oak.create_version()
 
-        oak01.add_resource("default", "png", "url://images/oak01.png")
-        oak01.add_resource("stats", "xml", "/path/to/file.xml")
+        oak01.add_resource(
+            "default", "png", "url://images/oak01.png"
+        )
+        oak01.add_resource(
+            "stats", "xml", "/path/to/file.xml"
+        )
 
         pine = tiles.create_item("tree", "pine")
         pine01 = pine.create_version({"foo": "bar"})
-        pine01.add_resource("default", "png", "/path/to/pine01.png")
+        pine01.add_resource(
+            "default", "png", "/path/to/pine01.png"
+        )
 
         maps = client.create_collection("maps")
         forest = maps.create_item("2dmap", "forest")
