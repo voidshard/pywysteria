@@ -40,8 +40,26 @@ class Client(object):
         else:
             self._conn = cls()
 
+    def connect(self):
+        """Connect to wysteria - used if you do not wish to use 'with'
+        """
+        try:
+            self._conn.close()
+        except:
+            pass
+        self._conn.connect()
+
+    def close(self):
+        """Disconnect from wysteria - used if you do not wish to use 'with'
+        """
+        self._conn.close()
+
     def __enter__(self):
         """Connect to remote host(s)"""
+        try:
+            self._conn.close()
+        except:
+            pass
         self._conn.connect()
 
     def __exit__(self, exc_type, exc_val, exc_tb):
