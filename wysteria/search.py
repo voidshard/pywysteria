@@ -98,7 +98,7 @@ class Search(object):
             self._conn.find_collections, limit, offset
         )
 
-    def find_items(self, limit, offset):
+    def find_items(self, limit=DEFAULT_QUERY_LIMIT, offset=0):
         """Run the built query and return matching items
 
         Args:
@@ -113,7 +113,7 @@ class Search(object):
         """
         return self._generic_run_query(self._conn.find_items, limit, offset)
 
-    def find_versions(self, limit, offset):
+    def find_versions(self, limit=DEFAULT_QUERY_LIMIT, offset=0):
         """Run the built query and return matching versions
 
         Args:
@@ -128,7 +128,7 @@ class Search(object):
         """
         return self._generic_run_query(self._conn.find_versions, limit, offset)
 
-    def find_resources(self, limit, offset):
+    def find_resources(self, limit=DEFAULT_QUERY_LIMIT, offset=0):
         """Run the built query and return matching resources
 
         Args:
@@ -143,7 +143,7 @@ class Search(object):
         """
         return self._generic_run_query(self._conn.find_resources, limit, offset)
 
-    def find_links(self, limit, offset):
+    def find_links(self, limit=DEFAULT_QUERY_LIMIT, offset=0):
         """Run the built query and return matching links
 
         Args:
