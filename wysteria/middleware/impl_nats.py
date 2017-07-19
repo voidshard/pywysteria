@@ -155,10 +155,11 @@ class WysteriaNatsMiddleware(WysteriaConnectionBase):
             Exception on server err
         """
         data = {
-            "query": [q.encode() for q in query],
+            "query": [q.encode() for q in query if q.is_valid],
             "limit": limit,
             "offset": offset,
         }
+
         reply = self._sync_idempotent_msg(data, key)
 
         err_msg = reply.get("Error")
@@ -449,19 +450,23 @@ class WysteriaNatsMiddleware(WysteriaConnectionBase):
 
         return reply.get("Id")
 
-    def create_collection(self, name):
+    def create_collection(self, collection):
         """Create collection with given name, return ID of new collection
 
         Args:
-            name (str):
+            collection (domain.Collection):
 
         Returns:
             str
         """
         data = json.dumps({
-            "Name": name,
+            "Collection": collection.encode(),
         })
-        find_query = [domain.QueryDesc().name(name)]
+        find_query = [
+            domain.QueryDesc()
+                .name(collection.name)
+                .parent(collection.parent)
+        ]
         return self._generic_create(
             data,
             find_query,

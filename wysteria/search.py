@@ -10,6 +10,7 @@ class Search(object):
     def params(self,
                id="",
                name="",
+               parent="",
                version_number=0,
                item_type="",
                item_variant="",
@@ -29,6 +30,7 @@ class Search(object):
         Args:
             id (str):
             name (str):
+            parent (str):
             version_number (int):
             item_type (str):
             item_variant (str):
@@ -44,6 +46,7 @@ class Search(object):
         qd = QueryDesc()\
             .id(id)\
             .name(name)\
+            .parent(parent)\
             .version_number(version_number)\
             .item_type(item_type)\
             .item_variant(item_variant)\
@@ -52,12 +55,8 @@ class Search(object):
             .resource_location(resource_location)\
             .link_source(link_source)\
             .link_destination(link_destination)
-        
-        if not qd.is_valid:
-            return False
 
         self._query.append(qd)
-        return True
 
     def _ready_search(self):
         """Returns if we are ready to launch query, that is we must have at

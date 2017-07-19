@@ -12,7 +12,12 @@ class Collection(WysBaseObj):
         self.__conn = conn
         self._id = ""
         self._name = ""
+        self._parent = ""
         self._load(data)
+
+    @property
+    def parent(self):
+        return self._parent
 
     @property
     def name(self):
@@ -25,6 +30,36 @@ class Collection(WysBaseObj):
     def delete(self):
         """Delete this collection. All children will be deleted too."""
         return self.__conn.delete_collection(self.id)
+
+    def create_collection(self, name):
+        """Create a sub collection of this collection
+
+        Args:
+            name (str): name of collection
+
+        Returns:
+            domain.Collection
+        """
+        c = Collection(self.__conn, {
+            "name": name,
+            "parent": self.id,
+        })
+        c._id = self.__conn.create_collection(c)
+        return c
+
+    def get_collections(self, name=None):
+        """Return child collections of this collection
+
+        Args:
+            name (str):
+
+        Returns:
+            []domain.Collection
+        """
+        query = QueryDesc().parent(self.id)
+        if name:
+            query.name(name)
+        return self.__conn.find_collections([query])
 
     def create_item(self, item_type, variant, facets=None):
         """Create a child item with the given name & variant.

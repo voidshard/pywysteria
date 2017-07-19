@@ -162,11 +162,11 @@ class WysteriaConnectionBase(object):
         pass
 
     @abc.abstractmethod
-    def create_collection(self, name):
+    def create_collection(self, collection):
         """Create collection with given name, return ID of new collection
 
         Args:
-            name (str):
+            collection (wysteria.domain.Collection): input collection
 
         Returns:
             str

@@ -103,11 +103,9 @@ class Client(object):
         Returns:
             domain.Collection
         """
-        collection_id = self._conn.create_collection(name)
-        return Collection(self._conn, {
-            "id": collection_id,
-            "name": name,
-        })
+        c = Collection(self._conn, {"name": name})
+        c._id = self._conn.create_collection(c)
+        return c
 
     def get_collection(self, identifier):
         """Find a collection by either name or id
