@@ -351,7 +351,7 @@ class WysteriaNatsMiddleware(WysteriaConnectionBase):
         if err_msg:
             raise Exception(err_msg)
 
-    def _sync_update_facets_msg(self, oid, facets, key, find_func, timeout=3):
+    def _sync_update_facets_msg(self, oid, facets, key, find_func):
         """
 
         Args:
@@ -359,7 +359,6 @@ class WysteriaNatsMiddleware(WysteriaConnectionBase):
             facets (dict):
             key (str):
             find_func (func): function (str, str) -> []Version or []Item
-            timeout (float): time to wait between retries
 
         Raises:
             Exception on network / server error
@@ -376,7 +375,7 @@ class WysteriaNatsMiddleware(WysteriaConnectionBase):
             try:
                 reply = self._single_request(data, key)
                 break  # if nothing goes wrong, we break out of the loop
-            except Exception as e:
+            except (RequestTimeoutError, Empty) as e:
                 if count >= NATS_MSG_RETRIES:
                     raise
 
