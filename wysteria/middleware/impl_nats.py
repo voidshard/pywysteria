@@ -1,14 +1,17 @@
 import json
-from Queue import Queue
+import tornado
+import threading
+from Queue import Queue, Empty
 
-from wysteria.libs.nats import NatsClient
+from nats.io.client import Client
 
 from abstract_dao import WysteriaConnectionBase
 from wysteria import domain
 from wysteria.constants import DEFAULT_QUERY_LIMIT
+from wysteria.errors import RequestTimeoutError
 
 
-_DEFAULT_URI = "nats://:@127.0.0.1:4222"  # default localhost, nats port
+_DEFAULT_URI = "nats://localhost:4222"  # default localhost, nats port
 _CLIENT_ROUTE = "w.client.%s"  # From a client
 
 # wysteria nats protocol routes 
@@ -40,35 +43,6 @@ NATS_MSG_RETRIES = 3
 NATS_MSG_TIMEOUT = 2
 
 
-class Inbox(object):
-    """
-    An internal class that represents our service waiting for a single reply.
-
-    At the moment we only do a single request -> reply so this is as simple
-    as possible. If we wanted a client side subscription we'd need .. more.
-    """
-    def __init__(self):
-        # For each request, we expect one and only one reply
-        self._queue = Queue(maxsize=1)
-
-    def queue_new_message(self, *args):
-        """Passed as a callback when we're waiting for a single in-sync reply
-
-        Args:
-            *args: args passed in by nats client. The first is our message
-
-        """
-        self._queue.put(args[0], block=False)
-
-    def wait_for_message(self):
-        """Block until a new message is added to our internal queue
-
-        Returns:
-            str
-        """
-        return self._queue.get(block=True, timeout=NATS_MSG_TIMEOUT)
-
-
 def _retry(func):
     """Simple wrapper func that retries the given func some number of times
     on any exception(s).
@@ -85,10 +59,66 @@ def _retry(func):
         for count in range(0, NATS_MSG_RETRIES + 1):
             try:
                 return func(*args, **kwargs)
-            except Exception as e:
+            except (RequestTimeoutError, Empty) as e:
                 if count >= NATS_MSG_RETRIES:
                     raise
     return retry_func
+
+
+class _TornadoNats(threading.Thread):
+    """
+    Tiny class to handle queuing requests through tornado.
+    """
+    _MAX_RECONNECTS = 10
+
+    def __init__(self, url):
+        threading.Thread.__init__(self)
+        self._conn = None
+        self._url = url
+        self._outgoing = Queue()
+        self._running = False
+
+    @tornado.gen.coroutine
+    def main(self):
+        """Connect to remote host(s)
+
+        Raises:
+            Exception if unable to establish connection to remote host(s)
+        """
+        self._conn = Client()
+        yield self._conn.connect(
+            servers=[self._url],
+            allow_reconnect=True,
+            max_reconnect_attempts=self._MAX_RECONNECTS
+        )
+        while self._running:
+            while not self._outgoing.empty():
+                reply_queue, key, data = self._outgoing.get()
+                result = yield self._conn.timed_request(key, data)
+                reply_queue.put(result.data)
+
+    def request(self, data, key, timeout=5):
+        q = Queue(maxsize=NATS_MSG_RETRIES)
+        self._outgoing.put((q, key, data))
+        try:
+            return q.get(timeout=timeout)
+        except Empty as e:
+            return RequestTimeoutError("Timeout waiting for server reply. Original %s" % e)
+
+    def stop(self):
+        self._running = False
+        try:
+            self._conn.flush()
+            self._conn.close()
+        except Exception as e:
+            pass
+
+    def run(self):
+        if self._running:
+            return
+
+        self._running = True
+        tornado.ioloop.IOLoop.instance().run_sync(self.main)
 
 
 class WysteriaNatsMiddleware(WysteriaConnectionBase):
@@ -115,7 +145,8 @@ class WysteriaNatsMiddleware(WysteriaConnectionBase):
         Raises:
             Exception if unable to establish connection to remote host(s)
         """
-        self._conn = NatsClient(uris=self._url)
+        self._conn = _TornadoNats(self._url)
+        self._conn.setDaemon(True)
         self._conn.start()
 
     def close(self):
@@ -123,7 +154,7 @@ class WysteriaNatsMiddleware(WysteriaConnectionBase):
         self._conn.stop()
 
     @_retry
-    def _sync_idempotent_msg(self, data, key):
+    def _sync_idempotent_msg(self, data, key, timeout=3):
         """Send an idempotent message to the server and wait for a reply.
 
         This will be retried on failure(s) up to NATS_MSG_RETRIES times.
@@ -131,13 +162,22 @@ class WysteriaNatsMiddleware(WysteriaConnectionBase):
         Args:
             data (dict): json data to send
             key (str): message subject
+            timeout (int): seconds to wait for reply
 
         Returns:
             dict
+
+        Raises:
+            RequestTimeoutError
         """
-        box = Inbox()
-        self._conn.request(key, json.dumps(data), box.queue_new_message)
-        return json.loads(box.wait_for_message())
+        return self._single_request(data, key, timeout=timeout)
+
+    def _single_request(self, data, key, timeout=5):
+        if not isinstance(data, str):
+            data = json.dumps(data)
+            
+        reply = self._conn.request(data, key, timeout=timeout)
+        return json.loads(reply)
 
     def _generic_find(self, query, key, limit, offset):
         """Send a find query to the server, return results (if any)
@@ -311,7 +351,7 @@ class WysteriaNatsMiddleware(WysteriaConnectionBase):
         if err_msg:
             raise Exception(err_msg)
 
-    def _sync_update_facets_msg(self, oid, facets, key, find_func):
+    def _sync_update_facets_msg(self, oid, facets, key, find_func, timeout=3):
         """
 
         Args:
@@ -319,6 +359,7 @@ class WysteriaNatsMiddleware(WysteriaConnectionBase):
             facets (dict):
             key (str):
             find_func (func): function (str, str) -> []Version or []Item
+            timeout (float): time to wait between retries
 
         Raises:
             Exception on network / server error
@@ -331,13 +372,9 @@ class WysteriaNatsMiddleware(WysteriaConnectionBase):
 
         reply = {}
         for count in range(0, NATS_MSG_RETRIES + 1):
-            # prepare our reply box
-            box = Inbox()
-
             # Fire the update request to wysteria
-            self._conn.request(key, data, box.queue_new_message)
             try:
-                reply = json.loads(box.wait_for_message())
+                reply = self._single_request(data, key)
                 break  # if nothing goes wrong, we break out of the loop
             except Exception as e:
                 if count >= NATS_MSG_RETRIES:
@@ -404,7 +441,7 @@ class WysteriaNatsMiddleware(WysteriaConnectionBase):
             self.find_items
         )
 
-    def _generic_create(self, request_data, find_query, key, find_func):
+    def _generic_create(self, request_data, find_query, key, find_func, timeout=3):
         """Creation requests for
          - collection
          - item
@@ -418,21 +455,18 @@ class WysteriaNatsMiddleware(WysteriaConnectionBase):
             find_query ([]domain.QueryDesc): query to uniquely find the obj
             key (str): nats subject to send
             find_func: function to find desired obj
+            timeout (float): time to wait before retry
 
         Returns:
             str
         """
         reply = {}
         for count in range(0, NATS_MSG_RETRIES + 1):
-            # setup box to receive reply
-            box = Inbox()
-
             # send creation request
-            self._conn.request(key, request_data, box.queue_new_message)
             try:
-                reply = json.loads(box.wait_for_message())
+                reply = self._single_request(request_data, key)
                 break  # if nothing went wrong, we've created it successfully
-            except Exception as e:
+            except (RequestTimeoutError, Empty) as e:
                 if count >= NATS_MSG_RETRIES:
                     raise
 
