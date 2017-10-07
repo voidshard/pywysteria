@@ -37,6 +37,11 @@ def main():
         for item in items:
             print item
 
+        # All items!
+        print "Any item"
+        for item in client.search().find_items():
+            print item
+
 
 if __name__ == "__main__":
     main()
