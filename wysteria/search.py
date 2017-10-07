@@ -58,15 +58,6 @@ class Search(object):
 
         self._query.append(qd)
 
-    def _ready_search(self):
-        """Returns if we are ready to launch query, that is we must have at
-        least one valid query ready to go.
-
-        Returns:
-            bool
-        """
-        return len(self._query) > 0
-
     def _generic_run_query(self, find_func, limit, offset):
         """Run the built query and return matching collections
 
@@ -76,8 +67,6 @@ class Search(object):
         Raises:
             wysteria.errors.InvalidQuery if no search terms given
         """
-        if not self._ready_search():
-            return []
         return find_func(self._query, limit=limit, offset=offset)
 
     def find_collections(self, limit=DEFAULT_QUERY_LIMIT, offset=0):
