@@ -106,7 +106,7 @@ class _TornadoNats(threading.Thread):
 
     def request(self, data, key, timeout=5):
         q = Queue(maxsize=NATS_MSG_RETRIES)
-        self._outgoing.put((q, key, data))
+        self._outgoing.put_nowait((q, key, data))
         try:
             return q.get(timeout=max([_NATS_MIN_TIMEOUT, timeout]))
         except Empty as e:
