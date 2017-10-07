@@ -1,6 +1,8 @@
 """
 
 """
+import ssl
+from copy import copy
 
 from wysteria.middleware import NatsMiddleware
 from wysteria.errors import UnknownMiddleware
@@ -15,6 +17,29 @@ _AVAILABLE_MIDDLEWARES = {
 _DEFAULT_MIDDLEWARE = _KEY_MIDDLEWARE_NATS
 
 
+class TlsConfig(object):
+    """
+    Simple holder class for TLS information
+    """
+
+    __OPTS_SSL = [ssl.CERT_REQUIRED, ssl.CERT_NONE, ssl.CERT_OPTIONAL]
+
+    def __init__(self, keyfile=None, certfile=None, ca_certs=None, cert_reqs=ssl.CERT_REQUIRED):
+        if cert_reqs not in self.__OPTS_SSL:
+            raise ValueError("CertReq must be one of %s" % self.__OPTS_SSL)
+
+        self._opts = {
+            "ca_certs": ca_certs,
+            "keyfile": keyfile,
+            "certfile": certfile,
+            "cert_reqs": cert_reqs,
+        }
+
+    @property
+    def options(self):
+        return copy(self._opts)
+
+
 class Client(object):
     """
     WysteriaClient wraps a middleware class and provides convenience.
@@ -24,7 +49,7 @@ class Client(object):
     anything client facing.
     """
 
-    def __init__(self, url=None, middleware=_KEY_MIDDLEWARE_NATS):
+    def __init__(self, url=None, middleware=_KEY_MIDDLEWARE_NATS, tls=None):
         """
 
         Args:
@@ -35,10 +60,7 @@ class Client(object):
         if not cls:
             raise UnknownMiddleware("Unknown middleware '%s'" % middleware)
 
-        if url:
-            self._conn = cls(url=url)
-        else:
-            self._conn = cls()
+        self._conn = cls(**{"url": url, "tls": tls})
 
     def connect(self):
         """Connect to wysteria - used if you do not wish to use 'with'
@@ -115,7 +137,23 @@ class Client(object):
         result = self._conn.find_collections([
             QueryDesc().id(identifier),
             QueryDesc().name(identifier),
-        ])
+        ], limit=1)
+        if not result:
+            return None
+        return result[0]
+
+    def get_item(self, item_id):
+        """Find & return an item by its ID
+
+        Args:
+            item_id (str):
+
+        Returns:
+            domain.Item or None
+        """
+        result = self._conn.find_items([
+            QueryDesc().id(item_id),
+        ], limit=1)
         if not result:
             return None
         return result[0]

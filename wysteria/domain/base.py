@@ -60,7 +60,7 @@ class ChildWysObj(WysBaseObj):
         return self._parent
 
     @abc.abstractmethod
-    def __get_parent(self):
+    def _get_parent(self):
         """
 
         Returns:
@@ -72,8 +72,8 @@ class ChildWysObj(WysBaseObj):
         """Return the parent collection of this item
 
         Returns:
-            domain.Collection or None
+            sub class of WysBaseObj or None
         """
         if not self.__cached_parent_obj:
-            self.__cached_parent_obj = self.__get_parent()
+            self.__cached_parent_obj = self._get_parent()
         return self.__cached_parent_obj

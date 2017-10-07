@@ -14,6 +14,8 @@ def main():
         print collection
         print foo_maps
 
+        print "Parent of foo_maps", foo_maps.get_parent()
+
 
 if __name__ == "__main__":
     main()

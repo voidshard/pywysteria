@@ -71,12 +71,20 @@ class _TornadoNats(threading.Thread):
     """
     _MAX_RECONNECTS = 10
 
-    def __init__(self, url):
+    def __init__(self, url, tls):
         threading.Thread.__init__(self)
         self._conn = None
-        self._url = url
         self._outgoing = Queue()
         self._running = False
+
+        self.opts = {
+            "servers": [url],
+            "allow_reconnect": True,
+            "max_reconnect_attempts": self._MAX_RECONNECTS,
+        }
+
+        if tls:
+            self.opts["tls"] = tls.options
 
     @tornado.gen.coroutine
     def main(self):
@@ -86,11 +94,8 @@ class _TornadoNats(threading.Thread):
             Exception if unable to establish connection to remote host(s)
         """
         self._conn = Client()
-        yield self._conn.connect(
-            servers=[self._url],
-            allow_reconnect=True,
-            max_reconnect_attempts=self._MAX_RECONNECTS
-        )
+
+        yield self._conn.connect(**self.opts)
         while self._running:
             while not self._outgoing.empty():
                 reply_queue, key, data = self._outgoing.get()
@@ -128,7 +133,7 @@ class WysteriaNatsMiddleware(WysteriaConnectionBase):
     Using python nats client (copied & modified in libs/ dir)
     https://github.com/jackytu/python-nats/blob/master/nats/client.py
     """
-    def __init__(self, url=_DEFAULT_URI):
+    def __init__(self, url=None, tls=None):
         """Construct new client
 
         Url as in "nats://user:password@host:port"
@@ -136,8 +141,10 @@ class WysteriaNatsMiddleware(WysteriaConnectionBase):
         Args:
             url (str):
         """
-        self._conn = None
-        self._url = url
+        if not url:
+            url = _DEFAULT_URI
+
+        self._conn = _TornadoNats(url, tls)
 
     def connect(self):
         """Connect to remote host(s)
@@ -145,7 +152,6 @@ class WysteriaNatsMiddleware(WysteriaConnectionBase):
         Raises:
             Exception if unable to establish connection to remote host(s)
         """
-        self._conn = _TornadoNats(self._url)
         self._conn.setDaemon(True)
         self._conn.start()
 
