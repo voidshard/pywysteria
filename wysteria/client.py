@@ -56,10 +56,6 @@ class Client(object):
 
     def __enter__(self):
         """Connect to remote host(s)"""
-        try:
-            self._conn.close()
-        except:
-            pass
         self._conn.connect()
 
     def __exit__(self, exc_type, exc_val, exc_tb):
