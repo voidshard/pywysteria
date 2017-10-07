@@ -33,14 +33,14 @@ class Resource(ChildWysObj):
     def location(self):
         return self._location
 
-    def __get_parent(self):
+    def _get_parent(self):
         """Return the parent item of this version
 
         Returns:
             domain.Item or None
         """
         results = self.__conn.find_versions(
-            [QueryDesc().id(self._parent)]
+            [QueryDesc().id(self._parent)], limit=1
         )
         if results:
             return results[0]

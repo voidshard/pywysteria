@@ -137,7 +137,23 @@ class Client(object):
         result = self._conn.find_collections([
             QueryDesc().id(identifier),
             QueryDesc().name(identifier),
-        ])
+        ], limit=1)
+        if not result:
+            return None
+        return result[0]
+
+    def get_item(self, item_id):
+        """Find & return an item by its ID
+
+        Args:
+            item_id (str):
+
+        Returns:
+            domain.Item or None
+        """
+        result = self._conn.find_items([
+            QueryDesc().id(item_id),
+        ], limit=1)
         if not result:
             return None
         return result[0]

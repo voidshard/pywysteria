@@ -1,14 +1,15 @@
 """
 
 """
-from wysteria.domain.base import WysBaseObj
+from wysteria.domain.base import ChildWysObj
 from wysteria.domain.query_desc import QueryDesc
 from wysteria.domain.item import Item
 import wysteria.constants as consts
 
 
-class Collection(WysBaseObj):
+class Collection(ChildWysObj):
     def __init__(self, conn, data):
+        super(Collection, self).__init__()
         self.__conn = conn
         self._id = ""
         self._name = ""
@@ -16,15 +17,21 @@ class Collection(WysBaseObj):
         self._load(data)
 
     @property
-    def parent(self):
-        return self._parent
-
-    @property
     def name(self):
+        """Return the name of this collection
+
+        Returns:
+            str
+        """
         return self._name
 
     @property
     def id(self):
+        """Return the ID of this collection
+
+        Returns:
+            str
+        """
         return self._id
 
     def delete(self):
@@ -110,3 +117,17 @@ class Collection(WysBaseObj):
             query.item_variant(variant)
 
         return self.__conn.find_items([query])
+
+    def _get_parent(self):
+        """Return the parent Collection of this Collection
+
+        Returns:
+            domain.Collection or None
+        """
+        results = self.__conn.find_collections(
+            [QueryDesc().id(self.parent)],
+            limit=1
+        )
+        if results:
+            return results[0]
+        return None
