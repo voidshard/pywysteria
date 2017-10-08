@@ -64,7 +64,3 @@ with client:
 For more & more complicated examples please see the examples folder. 
 
 More information available over on the main repo for [wysteria](https://github.com/voidshard/wysteria)
-
-
-#### Thanks to
-jackytu, author of [python-nats](https://github.com/jackytu/python-nats)
