@@ -40,7 +40,7 @@ _KEY_UPDATE_VERSION = _CLIENT_ROUTE % "uv"
 
 
 NATS_MSG_RETRIES = 3
-NATS_MSG_TIMEOUT = 2
+_NATS_MIN_TIMEOUT = 2  # seconds, chosen by experimentation
 
 
 def _retry(func):
@@ -97,21 +97,24 @@ class _TornadoNats(threading.Thread):
 
         yield self._conn.connect(**self.opts)
         while self._running:
-            while not self._outgoing.empty():
-                reply_queue, key, data = self._outgoing.get()
-                result = yield self._conn.timed_request(key, data)
-                reply_queue.put(result.data)
+            reply_queue, key, data = self._outgoing.get(block=True)
+            if reply_queue is None:  # we'll pass None only when we want to exit
+                continue
+
+            result = yield self._conn.timed_request(key, data)
+            reply_queue.put(result.data)
 
     def request(self, data, key, timeout=5):
         q = Queue(maxsize=NATS_MSG_RETRIES)
-        self._outgoing.put((q, key, data))
+        self._outgoing.put_nowait((q, key, data))
         try:
-            return q.get(timeout=timeout)
+            return q.get(timeout=max([_NATS_MIN_TIMEOUT, timeout]))
         except Empty as e:
             return RequestTimeoutError("Timeout waiting for server reply. Original %s" % e)
 
     def stop(self):
         self._running = False
+        self._outgoing.put((None, None, None))
         try:
             self._conn.flush()
             self._conn.close()
