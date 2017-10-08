@@ -40,7 +40,7 @@ _KEY_UPDATE_VERSION = _CLIENT_ROUTE % "uv"
 
 
 NATS_MSG_RETRIES = 3
-_NATS_MIN_TIMEOUT = 2  # seconds, chosen but experimentation
+_NATS_MIN_TIMEOUT = 2  # seconds, chosen by experimentation
 
 
 def _retry(func):
