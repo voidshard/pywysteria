@@ -1,10 +1,10 @@
 # pywysteria
 
-Python2.7 client for open source asset versioning & publishing system [wysteria](https://github.com/voidshard/wysteria)
+Python3 client for open source asset versioning and publishing system [wysteria](https://github.com/voidshard/wysteria)
 
 
 ### Basic Usage
-##### Creating, publishing & linking
+##### Creating, publishing, linking
 ```python
 
 import wysteria
@@ -57,10 +57,17 @@ with client:
     search.params(item_type="tree", item_variant="oak")
 
     # find any & all matching items
-    print "Items of type 'tree' and variant 'oak'"
+    print("Items of type 'tree' and variant 'oak'")
     items = search.find_items()
 ```
 
 For more & more complicated examples please see the examples folder. 
 
 More information available over on the main repo for [wysteria](https://github.com/voidshard/wysteria)
+=======
+
+
+#### Requires
+
+- Nats client: https://github.com/nats-io/asyncio-nats
+- Config file parser: https://pypi.python.org/pypi/configparser

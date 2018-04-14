@@ -3,22 +3,27 @@ from wysteria.constants import DEFAULT_QUERY_LIMIT
 
 
 class Search(object):
+    """The search object is used to build a query to send to wysteria.
+    """
+
     def __init__(self, conn):
         self._conn = conn
         self._query = []
 
-    def params(self,
-               id="",
-               name="",
-               parent="",
-               version_number=0,
-               item_type="",
-               item_variant="",
-               facets=None,
-               resource_type="",
-               resource_location="",
-               link_source="",
-               link_destination=""):
+    def params(
+            self,
+            id: str="",
+            name: str="",
+            parent: str="",
+            version_number: int=0,
+            item_type: str="",
+            item_variant: str="",
+            facets: dict=None,
+            resource_type: str="",
+            resource_location: str="",
+            link_source: str="",
+            link_destination: str=""
+    ):
         """Append the given query description to the query we're going to
         launch. Objects returned will be required to match all of the terms
         specified on at least one of the query description objects.
@@ -43,6 +48,9 @@ class Search(object):
         Returns:
             bool
         """
+        if not facets:
+            facets = {}
+
         qd = QueryDesc()\
             .id(id)\
             .name(name)\
@@ -50,7 +58,7 @@ class Search(object):
             .version_number(version_number)\
             .item_type(item_type)\
             .item_variant(item_variant)\
-            .has_facets(facets)\
+            .has_facets(**facets)\
             .resource_type(resource_type)\
             .resource_location(resource_location)\
             .link_source(link_source)\
@@ -58,7 +66,7 @@ class Search(object):
 
         self._query.append(qd)
 
-    def _generic_run_query(self, find_func, limit, offset):
+    def _generic_run_query(self, find_func, limit: int, offset: int):
         """Run the built query and return matching collections
 
         Returns:
@@ -69,7 +77,7 @@ class Search(object):
         """
         return find_func(self._query, limit=limit, offset=offset)
 
-    def find_collections(self, limit=DEFAULT_QUERY_LIMIT, offset=0):
+    def find_collections(self, limit: int=DEFAULT_QUERY_LIMIT, offset: int=0):
         """Run the built query and return matching collections
 
         Args:
@@ -86,7 +94,7 @@ class Search(object):
             self._conn.find_collections, limit, offset
         )
 
-    def find_items(self, limit=DEFAULT_QUERY_LIMIT, offset=0):
+    def find_items(self, limit: int=DEFAULT_QUERY_LIMIT, offset: int=0):
         """Run the built query and return matching items
 
         Args:
@@ -101,7 +109,7 @@ class Search(object):
         """
         return self._generic_run_query(self._conn.find_items, limit, offset)
 
-    def find_versions(self, limit=DEFAULT_QUERY_LIMIT, offset=0):
+    def find_versions(self, limit:int =DEFAULT_QUERY_LIMIT, offset: int=0):
         """Run the built query and return matching versions
 
         Args:
@@ -116,7 +124,7 @@ class Search(object):
         """
         return self._generic_run_query(self._conn.find_versions, limit, offset)
 
-    def find_resources(self, limit=DEFAULT_QUERY_LIMIT, offset=0):
+    def find_resources(self, limit:int =DEFAULT_QUERY_LIMIT, offset: int=0):
         """Run the built query and return matching resources
 
         Args:
@@ -131,7 +139,7 @@ class Search(object):
         """
         return self._generic_run_query(self._conn.find_resources, limit, offset)
 
-    def find_links(self, limit=DEFAULT_QUERY_LIMIT, offset=0):
+    def find_links(self, limit:int =DEFAULT_QUERY_LIMIT, offset: int=0):
         """Run the built query and return matching links
 
         Args:
