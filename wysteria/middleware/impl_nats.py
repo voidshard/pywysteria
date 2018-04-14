@@ -1,20 +1,22 @@
 import json
-import tornado
 import threading
-from Queue import Queue, Empty
+import ssl
+import queue
 
-from nats.io.client import Client
+import asyncio
+from nats.aio.client import Client as NatsClient
+from nats.aio import errors as nats_errors
 
-from abstract_dao import WysteriaConnectionBase
+from wysteria.middleware.abstract_middleware import WysteriaConnectionBase
+from wysteria import constants as consts
 from wysteria import domain
-from wysteria.constants import DEFAULT_QUERY_LIMIT
-from wysteria.errors import RequestTimeoutError
+from wysteria import errors
 
 
 _DEFAULT_URI = "nats://localhost:4222"  # default localhost, nats port
 _CLIENT_ROUTE = "w.client.%s"  # From a client
 
-# wysteria nats protocol routes 
+# wysteria nats protocol routes
 _KEY_CREATE_COLLECTION = _CLIENT_ROUTE % "cc"
 _KEY_CREATE_ITEM = _CLIENT_ROUTE % "ci"
 _KEY_CREATE_VERSION = _CLIENT_ROUTE % "cv"
@@ -35,8 +37,17 @@ _KEY_FIND_LINK = _CLIENT_ROUTE % "fl"
 _KEY_GET_PUBLISHED = _CLIENT_ROUTE % "gp"
 _KEY_SET_PUBLISHED = _CLIENT_ROUTE % "sp"
 
+_KEY_UPDATE_COLLECTION = _CLIENT_ROUTE % "uc"
 _KEY_UPDATE_ITEM = _CLIENT_ROUTE % "ui"
 _KEY_UPDATE_VERSION = _CLIENT_ROUTE % "uv"
+_KEY_UPDATE_RESOURCE = _CLIENT_ROUTE % "ur"
+_KEY_UPDATE_LINK = _CLIENT_ROUTE % "ul"
+
+_ERR_ALREADY_EXISTS = "already-exists"
+_ERR_INVALID = "invalid-input"
+_ERR_ILLEGAL = "illegal-operation"
+_ERR_NOT_FOUND = "not-found"
+_ERR_NOT_SERVING = "operation-rejected"
 
 
 NATS_MSG_RETRIES = 3
@@ -47,7 +58,7 @@ def _retry(func):
     """Simple wrapper func that retries the given func some number of times
     on any exception(s).
 
-    Warning: Care should be taken only to use this on idempotent functions only
+    Warning: Care should be taken to use this on idempotent functions only
 
     Args:
         func:
@@ -59,95 +70,162 @@ def _retry(func):
         for count in range(0, NATS_MSG_RETRIES + 1):
             try:
                 return func(*args, **kwargs)
-            except (RequestTimeoutError, Empty) as e:
+            except (errors.RequestTimeoutError, queue.Empty) as e:
                 if count >= NATS_MSG_RETRIES:
                     raise
     return retry_func
 
 
-class _TornadoNats(threading.Thread):
+class _AsyncIONats(threading.Thread):
+    """Tiny class to handle queuing requests through asyncio.
+
+    Essentially, a wrapper class around the Nats.IO asyncio implementation to provide us with
+    the functionality we're after. This makes for a much nicer interface to work with than
+    the incredibly annoying & ugly examples https://github.com/nats-io/asyncio-nats .. ewww.
     """
-    Tiny class to handle queuing requests through tornado.
-    """
+
     _MAX_RECONNECTS = 10
 
     def __init__(self, url, tls):
         threading.Thread.__init__(self)
         self._conn = None
-        self._outgoing = Queue()
+        self._outgoing = queue.Queue()  # outbound messages added in request()
         self._running = False
 
-        self.opts = {
+        self.opts = {  # opts to pass to Nats.io client
             "servers": [url],
             "allow_reconnect": True,
             "max_reconnect_attempts": self._MAX_RECONNECTS,
         }
 
         if tls:
-            self.opts["tls"] = tls.options
+            self.opts["tls"] = tls
 
-    @tornado.gen.coroutine
-    def main(self):
+    @asyncio.coroutine
+    def main(self, loop):
         """Connect to remote host(s)
 
         Raises:
-            Exception if unable to establish connection to remote host(s)
+            NoServersError
         """
-        self._conn = Client()
+        # explicitly set the asyncio event loop so it can't get confused ..
+        asyncio.set_event_loop(loop)
 
-        yield self._conn.connect(**self.opts)
+        self._conn = NatsClient()
+
+        try:
+            yield from self._conn.connect(io_loop=loop, **self.opts)
+        except nats_errors.ErrNoServers as e:
+            # Could not connect to any server in the cluster.
+            raise errors.NoServersError(e)
+
         while self._running:
-            reply_queue, key, data = self._outgoing.get(block=True)
-            if reply_queue is None:  # we'll pass None only when we want to exit
+            if self._outgoing.empty():
+                # No one wants to send a message
                 continue
 
-            result = yield self._conn.timed_request(key, data)
-            reply_queue.put(result.data)
+            if not self._conn.is_connected:
+                # give nats more time to (re)connect
+                continue
 
-    def request(self, data, key, timeout=5):
-        q = Queue(maxsize=NATS_MSG_RETRIES)
-        self._outgoing.put_nowait((q, key, data))
+            reply_queue, key, data = self._outgoing.get_nowait()  # pull request from queue
+            if reply_queue is None:
+                # we're passed None only when we're supposed to exit. See stop()
+                break
+
+            try:
+                result = yield from self._conn.request(key, bytes(data, encoding="utf8"))
+                reply_queue.put_nowait(result.data.decode())
+            except nats_errors.ErrConnectionClosed as e:
+                reply_queue.put_nowait(errors.ConnectionClosedError(e))
+            except (nats_errors.ErrTimeout, queue.Empty) as e:
+                reply_queue.put_nowait(errors.RequestTimeoutError(e))
+            except Exception as e:  # pass all errors up to the caller
+                reply_queue.put_nowait(e)
+
+        yield from self._conn.close()
+
+    def request(self, data: dict, key: str, timeout: int=5) -> dict:
+        """Send a request to the server & await the reply.
+
+        Args:
+            data: data to send
+            key: the key (subject) to send the message to
+            timeout: some time in seconds to wait before calling it quits
+
+        Returns:
+            dict
+
+        Raises:
+            RequestTimeoutError
+            ConnectionClosedError
+            NoServersError
+        """
+        q = queue.Queue(maxsize=NATS_MSG_RETRIES)  # create a queue to get a reply on
+        self._outgoing.put_nowait((q, key, data))  # add our message to the outbound queue
         try:
-            return q.get(timeout=max([_NATS_MIN_TIMEOUT, timeout]))
-        except Empty as e:
-            return RequestTimeoutError("Timeout waiting for server reply. Original %s" % e)
+            result = q.get(timeout=max([_NATS_MIN_TIMEOUT, timeout]))  # block for a reply
+        except queue.Empty as e:  # we waited, but nothing was returned to us :(
+            raise errors.RequestTimeoutError("Timeout waiting for server reply. Original %s" % e)
+
+        if isinstance(result, Exception):
+            raise result
+        return result
 
     def stop(self):
+        """Stop the service, killing open connection(s)
+        """
+        # set to false to kill coroutine running in main()
         self._running = False
+
+        # interpreted as a poison pill (causes main() loop to break)
         self._outgoing.put((None, None, None))
+
+        if not self._conn:
+            return
+
         try:
+            # flush & kill the actual connections
             self._conn.flush()
             self._conn.close()
-        except Exception as e:
+        except Exception:
             pass
 
     def run(self):
+        """Start the service
+        """
         if self._running:
             return
 
         self._running = True
-        tornado.ioloop.IOLoop.instance().run_sync(self.main)
+
+        loop = asyncio.new_event_loop()
+        loop.run_until_complete(self.main(loop))
+        try:
+            loop.close()
+        except Exception:
+            pass
 
 
 class WysteriaNatsMiddleware(WysteriaConnectionBase):
-    """
-    Wysteria middleware client using Nats.io to manage transport
+    """Wysteria middleware client using Nats.io to manage transport
 
     Using python nats client (copied & modified in libs/ dir)
     https://github.com/jackytu/python-nats/blob/master/nats/client.py
     """
-    def __init__(self, url=None, tls=None):
+    def __init__(self, url: str=None, tls=None):
         """Construct new client
 
         Url as in "nats://user:password@host:port"
 
         Args:
-            url (str):
+            url (str)
+            tls (ssl_context)
         """
         if not url:
             url = _DEFAULT_URI
 
-        self._conn = _TornadoNats(url, tls)
+        self._conn = _AsyncIONats(url, tls)
 
     def connect(self):
         """Connect to remote host(s)
@@ -163,7 +241,7 @@ class WysteriaNatsMiddleware(WysteriaConnectionBase):
         self._conn.stop()
 
     @_retry
-    def _sync_idempotent_msg(self, data, key, timeout=3):
+    def _sync_idempotent_msg(self, data: dict, key: str, timeout: int=3):
         """Send an idempotent message to the server and wait for a reply.
 
         This will be retried on failure(s) up to NATS_MSG_RETRIES times.
@@ -177,18 +255,28 @@ class WysteriaNatsMiddleware(WysteriaConnectionBase):
             dict
 
         Raises:
-            RequestTimeoutError
+            errors.RequestTimeoutError
         """
         return self._single_request(data, key, timeout=timeout)
 
-    def _single_request(self, data, key, timeout=5):
+    def _single_request(self, data: dict, key: str, timeout: int=5) -> int:
+        """
+
+        Args:
+            data: dict
+            key: str (subject key)
+            timeout: time in seconds to wait before erroring
+
+        Returns:
+            dict
+        """
         if not isinstance(data, str):
             data = json.dumps(data)
-            
+
         reply = self._conn.request(data, key, timeout=timeout)
         return json.loads(reply)
 
-    def _generic_find(self, query, key, limit, offset):
+    def _generic_find(self, query: list, key: str, limit: int, offset: int):
         """Send a find query to the server, return results (if any)
 
         Args:
@@ -215,9 +303,10 @@ class WysteriaNatsMiddleware(WysteriaConnectionBase):
         if err_msg:  # wysteria replied with an err, we should raise it
             raise Exception(err_msg)
 
-        return reply.get("All", [])
+        # the server replies with UpperCase strings, but we want to python-ise to lowercase
+        return [{k.lower(): v for k, v in result.items()} for result in reply.get("All", [])]
 
-    def find_collections(self, query, limit=DEFAULT_QUERY_LIMIT, offset=0):
+    def find_collections(self, query: list, limit: int=consts.DEFAULT_QUERY_LIMIT, offset: int=0):
         """Query server & return type appropriate matching results
 
         Args:
@@ -232,12 +321,12 @@ class WysteriaNatsMiddleware(WysteriaConnectionBase):
             Exception on network / server error
         """
         return [
-            domain.Collection(self, c) for c in self._generic_find(
+            domain.Collection(self, **c) for c in self._generic_find(
                 query, _KEY_FIND_COLLECTION, limit, offset
             )
         ]
 
-    def find_items(self, query, limit=DEFAULT_QUERY_LIMIT, offset=0):
+    def find_items(self, query: list, limit: int=consts.DEFAULT_QUERY_LIMIT, offset: int=0):
         """Query server & return type appropriate matching results
 
         Args:
@@ -252,12 +341,12 @@ class WysteriaNatsMiddleware(WysteriaConnectionBase):
             Exception on network / server error
         """
         return [
-            domain.Item(self, c) for c in self._generic_find(
+            domain.Item(self, **c) for c in self._generic_find(
                 query, _KEY_FIND_ITEM, limit, offset
             )
         ]
-    
-    def find_versions(self, query, limit=DEFAULT_QUERY_LIMIT, offset=0):
+
+    def find_versions(self, query: list, limit: int=consts.DEFAULT_QUERY_LIMIT, offset: int=0):
         """Query server & return type appropriate matching results
 
         Args:
@@ -272,12 +361,12 @@ class WysteriaNatsMiddleware(WysteriaConnectionBase):
             Exception on network / server error
         """
         return [
-            domain.Version(self, c) for c in self._generic_find(
+            domain.Version(self, **c) for c in self._generic_find(
                 query, _KEY_FIND_VERSION, limit, offset
             )
         ]
 
-    def find_resources(self, query, limit=DEFAULT_QUERY_LIMIT, offset=0):
+    def find_resources(self, query: list, limit: int=consts.DEFAULT_QUERY_LIMIT, offset: int=0):
         """Query server & return type appropriate matching results
 
         Args:
@@ -292,12 +381,12 @@ class WysteriaNatsMiddleware(WysteriaConnectionBase):
             Exception on network / server error
         """
         return [
-            domain.Resource(self, c) for c in self._generic_find(
+            domain.Resource(self, **c) for c in self._generic_find(
                 query, _KEY_FIND_RESOURCE, limit, offset
             )
         ]
 
-    def find_links(self, query, limit=DEFAULT_QUERY_LIMIT, offset=0):
+    def find_links(self, query: list, limit: int=consts.DEFAULT_QUERY_LIMIT, offset: int=0):
         """Query server & return type appropriate matching results
 
         Args:
@@ -312,12 +401,12 @@ class WysteriaNatsMiddleware(WysteriaConnectionBase):
             Exception on network / server error
         """
         return [
-            domain.Link(self, c) for c in self._generic_find(
+            domain.Link(self, **c) for c in self._generic_find(
                 query, _KEY_FIND_LINK, limit, offset
             )
         ]
-    
-    def get_published_version(self, oid):
+
+    def get_published_version(self, oid: str):
         """Item ID to find published version for
 
         Args:
@@ -341,9 +430,10 @@ class WysteriaNatsMiddleware(WysteriaConnectionBase):
         if not data:
             return None
 
-        return domain.Version(self, data)
+        # the server replies with UpperCase keys, we want to pythonize to lowercase
+        return domain.Version(self, **{k.lower(): v for k, v in data.items()})
 
-    def publish_version(self, oid):
+    def publish_version(self, oid: str):
         """Version ID mark as published
 
         Args:
@@ -360,8 +450,8 @@ class WysteriaNatsMiddleware(WysteriaConnectionBase):
         if err_msg:
             raise Exception(err_msg)
 
-    def _sync_update_facets_msg(self, oid, facets, key, find_func):
-        """
+    def _sync_update_facets_msg(self, oid: str, facets: dict, key: str, find_func):
+        """Specific call to update the facets on an object matching the given `oid`
 
         Args:
             oid (str):
@@ -370,7 +460,8 @@ class WysteriaNatsMiddleware(WysteriaConnectionBase):
             find_func (func): function (str, str) -> []Version or []Item
 
         Raises:
-            Exception on network / server error
+            RequestTimeoutError
+            ? Exception on network / server error
         """
         data = json.dumps({
             "id": oid,
@@ -384,7 +475,7 @@ class WysteriaNatsMiddleware(WysteriaConnectionBase):
             try:
                 reply = self._single_request(data, key)
                 break  # if nothing goes wrong, we break out of the loop
-            except (RequestTimeoutError, Empty) as e:
+            except (errors.RequestTimeoutError, queue.Empty) as e:
                 if count >= NATS_MSG_RETRIES:
                     raise
 
@@ -397,7 +488,7 @@ class WysteriaNatsMiddleware(WysteriaConnectionBase):
 
             # Check if the keys we want to set are set already
             matching_obj = matching_wysteria_objects[0]
-            for key, value in facets.iteritems():
+            for key, value in facets.items():
                 if matching_obj.facets.get(key, "") != str(value):
                     retry = True
                     break
@@ -410,7 +501,7 @@ class WysteriaNatsMiddleware(WysteriaConnectionBase):
         if err_msg:
             raise Exception(err_msg)
 
-    def update_version_facets(self, oid, facets):
+    def update_version_facets(self, oid: str, facets: dict):
         """Update version with matching ID with given facets.
 
         This is smart enough to only retry failed updates if the given update
@@ -432,7 +523,7 @@ class WysteriaNatsMiddleware(WysteriaConnectionBase):
             self.find_versions
         )
 
-    def update_item_facets(self, oid, facets):
+    def update_item_facets(self, oid: str, facets: dict):
         """Update item with matching ID with given facets
 
         Args:
@@ -449,12 +540,66 @@ class WysteriaNatsMiddleware(WysteriaConnectionBase):
             self.find_items
         )
 
-    def _generic_create(self, request_data, find_query, key, find_func, timeout=3):
+    def update_collection_facets(self, oid: str, facets: dict):
+        """Update collection with matching ID with given facets
+
+        Args:
+            oid (str): collection ID to update
+            facets (dict): new facets (these are added to existing facets)
+
+        Raises:
+            Exception on network / server error
+        """
+        self._sync_update_facets_msg(
+            oid,
+            facets,
+            _KEY_UPDATE_COLLECTION,
+            self.find_collections
+        )
+
+    def update_resource_facets(self, oid: str, facets: dict):
+        """Update resource with matching ID with given facets
+
+        Args:
+            oid (str): resource ID to update
+            facets (dict): new facets (these are added to existing facets)
+
+        Raises:
+            Exception on network / server error
+        """
+        self._sync_update_facets_msg(
+            oid,
+            facets,
+            _KEY_UPDATE_RESOURCE,
+            self.find_resources
+        )
+
+    def update_link_facets(self, oid: str, facets: dict):
+        """Update link with matching ID with given facets
+
+        Args:
+            oid (str): link ID to update
+            facets (dict): new facets (these are added to existing facets)
+
+        Raises:
+            Exception on network / server error
+        """
+        self._sync_update_facets_msg(
+            oid,
+            facets,
+            _KEY_UPDATE_LINK,
+            self.find_links
+        )
+
+    def _generic_create(
+        self, request_data: dict, find_query: list, key: str, find_func, timeout: int=3
+    ):
         """Creation requests for
          - collection
          - item
          - resource
          - link
+
         Are similar enough that we can refactor their create funcs into one.
         Versions however, are a different animal.
 
@@ -474,7 +619,7 @@ class WysteriaNatsMiddleware(WysteriaConnectionBase):
             try:
                 reply = self._single_request(request_data, key)
                 break  # if nothing went wrong, we've created it successfully
-            except (RequestTimeoutError, Empty) as e:
+            except (errors.RequestTimeoutError, queue.Empty) as e:
                 if count >= NATS_MSG_RETRIES:
                     raise
 
@@ -488,11 +633,39 @@ class WysteriaNatsMiddleware(WysteriaConnectionBase):
 
         err_msg = reply.get("Error")
         if err_msg:
-            raise Exception(err_msg)
+            self._translate_server_exception(err_msg)
 
         return reply.get("Id")
 
-    def create_collection(self, collection):
+    def _translate_server_exception(self, msg):
+        """Turn a wysteria error string into a python exception.
+
+        Args:
+            msg: error string from wysteria
+
+        Raises:
+            AlreadyExistsError
+            NotFoundError
+            InvalidInputError
+            IllegalOperationError
+            ServerUnavailableError
+            Exception
+        """
+        if _ERR_ALREADY_EXISTS in msg:
+            raise errors.AlreadyExistsError(msg)
+        elif _ERR_NOT_FOUND in msg:
+            raise errors.NotFoundError(msg)
+        elif _ERR_ILLEGAL in msg:
+            raise errors.IllegalOperationError(msg)
+        elif any([_ERR_INVALID in msg, "ffjson error" in msg]):
+            raise errors.InvalidInputError(msg)
+        elif _ERR_NOT_SERVING in msg:
+            raise errors.ServerUnavailableError(msg)
+
+        # something very unexpected happened
+        raise Exception(msg)
+
+    def create_collection(self, collection: domain.Collection):
         """Create collection with given name, return ID of new collection
 
         Args:
@@ -515,8 +688,8 @@ class WysteriaNatsMiddleware(WysteriaConnectionBase):
             _KEY_CREATE_COLLECTION,
             self.find_collections
         )
-    
-    def create_item(self, item):
+
+    def create_item(self, item: domain.Item):
         """Create item with given values, return ID of new item
 
         Args:
@@ -544,7 +717,7 @@ class WysteriaNatsMiddleware(WysteriaConnectionBase):
             self.find_items
         )
 
-    def create_version(self, version):
+    def create_version(self, version: domain.Version):
         """Create item with given values, return ID of new version
 
         Args:
@@ -571,11 +744,11 @@ class WysteriaNatsMiddleware(WysteriaConnectionBase):
 
         err_msg = reply.get("Error")
         if err_msg:
-            raise Exception(err_msg)
+            self._translate_server_exception(err_msg)
 
         return reply.get("Id"), reply.get("Version")
-    
-    def create_resource(self, resource):
+
+    def create_resource(self, resource: domain.Resource):
         """Create item with given values, return ID of new resource
 
         Args:
@@ -603,8 +776,8 @@ class WysteriaNatsMiddleware(WysteriaConnectionBase):
             _KEY_CREATE_RESOURCE,
             self.find_resources
         )
-    
-    def create_link(self, link):
+
+    def create_link(self, link: domain.Link):
         """Create item with given values, return ID of new link
 
         Args:
@@ -631,7 +804,7 @@ class WysteriaNatsMiddleware(WysteriaConnectionBase):
             self.find_links
         )
 
-    def _generic_delete(self, oid, key):
+    def _generic_delete(self, oid: str, key: str):
         """Call remote delete function with given params
 
         Args:
@@ -650,9 +823,9 @@ class WysteriaNatsMiddleware(WysteriaConnectionBase):
 
         err_msg = reply.get("Error")
         if err_msg:
-            raise Exception(err_msg)
+            self._translate_server_exception(err_msg)
 
-    def delete_collection(self, oid):
+    def delete_collection(self, oid: str):
         """Delete the matching obj type with the given id
 
         Args:
@@ -663,7 +836,7 @@ class WysteriaNatsMiddleware(WysteriaConnectionBase):
         """
         self._generic_delete(oid, _KEY_DELETE_COLLECTION)
 
-    def delete_item(self, oid):
+    def delete_item(self, oid: str):
         """Delete the matching obj type with the given id
 
         (Links will be deleted automatically)
@@ -675,8 +848,8 @@ class WysteriaNatsMiddleware(WysteriaConnectionBase):
             Exception if deletion fails / network error
         """
         self._generic_delete(oid, _KEY_DELETE_ITEM)
-    
-    def delete_version(self, oid):
+
+    def delete_version(self, oid: str):
         """Delete the matching obj type with the given id
 
         (Links will be deleted automatically)
@@ -689,7 +862,7 @@ class WysteriaNatsMiddleware(WysteriaConnectionBase):
         """
         self._generic_delete(oid, _KEY_DELETE_VERSION)
 
-    def delete_resource(self, oid):
+    def delete_resource(self, oid: str):
         """Delete the matching obj type with the given id
 
         Args:

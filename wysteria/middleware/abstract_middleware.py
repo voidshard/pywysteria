@@ -1,7 +1,7 @@
 import abc
 
 
-class WysteriaConnectionBase(object):
+class WysteriaConnectionBase(metaclass=abc.ABCMeta):
     """
     Abstract class to represent clientside wysteria middleware
 
@@ -136,6 +136,19 @@ class WysteriaConnectionBase(object):
         pass
 
     @abc.abstractmethod
+    def update_collection_facets(self, oid, facets):
+        """Update collection with matching ID with given facets
+
+        Args:
+            oid (str): collection ID to update
+            facets (dict): new facets (these are added to existing facets)
+
+        Raises:
+            Exception on network / server error
+        """
+        pass
+
+    @abc.abstractmethod
     def update_version_facets(self, oid, facets):
         """Update version with matching ID with given facets
 
@@ -154,6 +167,32 @@ class WysteriaConnectionBase(object):
 
         Args:
             oid (str): item ID to update
+            facets (dict): new facets (these are added to existing facets)
+
+        Raises:
+            Exception on network / server error
+        """
+        pass
+
+    @abc.abstractmethod
+    def update_resource_facets(self, oid, facets):
+        """Update resource with matching ID with given facets
+
+        Args:
+            oid (str): resource ID to update
+            facets (dict): new facets (these are added to existing facets)
+
+        Raises:
+            Exception on network / server error
+        """
+        pass
+
+    @abc.abstractmethod
+    def update_link_facets(self, oid, facets):
+        """Update link with matching ID with given facets
+
+        Args:
+            oid (str): link ID to update
             facets (dict): new facets (these are added to existing facets)
 
         Raises:
