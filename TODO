@@ -1,5 +1,1 @@
-* Improve errors raised (particularly by Nats client ..)
-* Clean up domain/ touching some private vars
-* For that matter, clean up the ._load nonsense
-* Consider adding refresh() func to domain objects
-* Unit tests would be nice
+* More tests
