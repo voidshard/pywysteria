@@ -1,47 +1,71 @@
 """
 
 """
-import copy
-
+import wysteria.constants as consts
 from wysteria.domain.base import ChildWysObj
 from wysteria.domain.query_desc import QueryDesc
 from wysteria.domain.version import Version
 from wysteria.domain.link import Link
-import wysteria.constants as consts
 
 
 class Item(ChildWysObj):
-    def __init__(self, conn, data):
-        super(Item, self).__init__()
+
+    def __init__(self, conn, **kwargs):
+        super().__init__(**kwargs)
         self.__conn = conn
-        self._id = ""
-        self._itemtype = ""
-        self._variant = ""
-        self._facets = {}
+        self._itemtype = kwargs.get("itemtype", "")
+        self._variant = kwargs.get("variant", "")
 
-        self._load(data)
+    def __eq__(self, other):
+        if not isinstance(other, Item):
+            raise NotImplementedError()
+
+        return all([
+            self.id == other.id,
+            self.parent == other.parent,
+            self.item_type == other.item_type,
+            self.variant == other.variant,
+            self.parent == other.parent,
+            self.facets == other.facets,
+        ])
+
+    def _encode(self) -> dict:
+        """Return a dict representation of this Item
+
+        Returns:
+            dict
+        """
+        return {
+            "id": self.id,
+            "parent": self._parent,
+            "facets": self.facets,
+            "itemtype": self._itemtype,
+            "variant": self._variant,
+        }
 
     @property
-    def id(self):
-        return self._id
+    def item_type(self) -> str:
+        """Return the item type for this Item
 
-    @property
-    def item_type(self):
+        Returns:
+            str
+        """
         return self._itemtype
 
     @property
-    def variant(self):
+    def variant(self) -> str:
+        """Return the item variant of this Item
+
+        Returns:
+            str
+        """
         return self._variant
 
-    @property
-    def facets(self):
-        return copy.copy(self._facets)
-
     def delete(self):
-        """Delete this item. Children will be deleted too."""
+        """Delete this item."""
         return self.__conn.delete_item(self.id)
 
-    def get_linked_by_name(self, name):
+    def get_linked_by_name(self, name: str):
         """Get linked Items by the link name
 
         Args:
@@ -61,7 +85,7 @@ class Item(ChildWysObj):
         item_query = [QueryDesc().id(l.destination) for l in links]
         return self.__conn.find_items(item_query)
 
-    def get_linked(self):
+    def get_linked(self) -> dict:
         """Get all linked items and return a dict of link name (str) to []item
 
         Returns:
@@ -97,41 +121,41 @@ class Item(ChildWysObj):
             result[link_name] = tmp
         return result
 
-    def link_to(self, name, item):
+    def link_to(self, name: str, item) -> Link:
         """Create link between two items
 
         Args:
             name (str):
             item (domain.Item):
 
+        Returns:
+            Link
+
+        Raises:
+            ValueError if given item not of type Item
         """
         if not isinstance(item, self.__class__):
-            return
+            raise ValueError(f"Expected item to be of type Item, got {item.__class__.__name__}")
 
         lnk = Link(
             self.__conn,
-            {
-                "src": self.id,
-                "dst": item.id,
-                "name": name,
-            }
+            src=self.id,
+            dst=item.id,
+            name=name,
+            facets={consts.FACET_LINK_TYPE: consts.VALUE_LINK_TYPE_ITEM}
         )
-        self.__conn.create_link(lnk)
+        lnk._id = self.__conn.create_link(lnk)
+        return lnk
 
-    def update_facets(self, facets):
+    def _update_facets(self, facets: dict):
         """Set given key / value pairs in item facets
 
         Args:
-            facets (dict):
-
+            facets: facets to update
         """
-        self._facets.update(facets)
-        self.__conn.update_item_facets(
-            self.id,
-            facets
-        )
+        self.__conn.update_item_facets(self.id, facets)
 
-    def create_version(self, facets=None):
+    def create_version(self, facets: dict=None) -> Version:
         """Create the next version obj for this item
 
         Args:
@@ -151,18 +175,19 @@ class Item(ChildWysObj):
         }
         facets.update(required_facets)
 
-        v = Version(self.__conn, {
-            "parent": self.id,
-            "facets": facets
-        })
+        v = Version(
+            self.__conn,
+            parent=self.id,
+            facets=facets
+        )
 
         vid, vnum = self.__conn.create_version(v)
         v._id = vid
         v._number = vnum
         return v
 
-    def get_published(self):
-        """
+    def get_published(self) -> Version:
+        """Gvet the current published version of this Item, if any
 
         Returns:
             domain.Version or None
@@ -173,9 +198,9 @@ class Item(ChildWysObj):
         """Return the parent item of this version
 
         Returns:
-            domain.Item or None
+            domain.Collection or None
         """
-        results = self.__conn.find_items(
+        results = self.__conn.find_collections(
             [QueryDesc().id(self._parent)],
             limit=1,
         )

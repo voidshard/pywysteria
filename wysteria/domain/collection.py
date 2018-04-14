@@ -1,23 +1,45 @@
 """
 
 """
-from wysteria.domain.base import ChildWysObj
-from wysteria.domain.query_desc import QueryDesc
-from wysteria.domain.item import Item
 import wysteria.constants as consts
+from wysteria.domain.base import ChildWysObj
+from wysteria.domain.item import Item
+from wysteria.domain.query_desc import QueryDesc
 
 
 class Collection(ChildWysObj):
-    def __init__(self, conn, data):
-        super(Collection, self).__init__()
+
+    def __init__(self, conn, **kwargs):
+        super().__init__(**kwargs)
         self.__conn = conn
-        self._id = ""
-        self._name = ""
-        self._parent = ""
-        self._load(data)
+        self._name = kwargs.get("name")
+
+    def _encode(self) -> dict:
+        """Return the dict representation of this object
+
+        Returns:
+            dict
+        """
+        return {
+            "id": self.id,
+            "name": self.name,
+            "parent": self._parent,
+            "facets": self.facets,
+        }
+
+    def __eq__(self, other):
+        if not isinstance(other, Collection):
+            raise NotImplementedError()
+
+        return all([
+            self.id == other.id,
+            self.name == other.name,
+            self.parent == other.parent,
+            self.facets == other.facets,
+        ])
 
     @property
-    def name(self):
+    def name(self) -> str:
         """Return the name of this collection
 
         Returns:
@@ -25,20 +47,12 @@ class Collection(ChildWysObj):
         """
         return self._name
 
-    @property
-    def id(self):
-        """Return the ID of this collection
-
-        Returns:
-            str
-        """
-        return self._id
-
     def delete(self):
-        """Delete this collection. All children will be deleted too."""
+        """Delete this collection. 
+        """
         return self.__conn.delete_collection(self.id)
 
-    def create_collection(self, name):
+    def create_collection(self, name: str):
         """Create a sub collection of this collection
 
         Args:
@@ -47,14 +61,20 @@ class Collection(ChildWysObj):
         Returns:
             domain.Collection
         """
-        c = Collection(self.__conn, {
-            "name": name,
-            "parent": self.id,
-        })
+        c = Collection(self.__conn, name=name, parent=self.id)
         c._id = self.__conn.create_collection(c)
         return c
 
-    def get_collections(self, name=None):
+    def _update_facets(self, facets: dict):
+        """Performs the actual facet update via wysteria
+
+        Args:
+            facets: dict
+
+        """
+        self.__conn.update_collection_facets(self.id, facets)
+
+    def get_collections(self, name: str=None):
         """Return child collections of this collection
 
         Args:
@@ -68,7 +88,7 @@ class Collection(ChildWysObj):
             query.name(name)
         return self.__conn.find_collections([query])
 
-    def create_item(self, item_type, variant, facets=None):
+    def create_item(self, item_type: str, variant: str, facets: dict=None) -> Item:
         """Create a child item with the given name & variant.
 
         Note a collection can only have one item with a given type & variant
@@ -89,16 +109,17 @@ class Collection(ChildWysObj):
         }
         facets.update(required_facets)
 
-        i = Item(self.__conn, {
-            "parent": self.id,
-            "itemtype": item_type,
-            "variant": variant,
-            "facets": facets,
-        })
+        i = Item(
+            self.__conn,
+            parent=self.id,
+            itemtype=item_type,
+            variant=variant,
+            facets=facets,
+        )
         i._id = self.__conn.create_item(i)
         return i
 
-    def get_items(self, item_type=None, variant=None):
+    def get_items(self, item_type: str=None, variant: str=None):
         """Return all child items of this
 
         Args:

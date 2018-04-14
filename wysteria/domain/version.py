@@ -2,22 +2,30 @@
 
 """
 
-import copy
-
 from wysteria.domain.base import ChildWysObj
 from wysteria.domain.query_desc import QueryDesc
 from wysteria.domain.resource import Resource
 from wysteria.domain.link import Link
+from wysteria import constants as consts
 
 
 class Version(ChildWysObj):
-    def __init__(self, conn, data):
-        super(Version, self).__init__()
+
+    def __init__(self, conn, **kwargs):
+        super().__init__(**kwargs)
         self.__conn = conn
-        self._id = ""
-        self._number = 0
-        self._facets = {}
-        self._load(data)
+        self._number = kwargs.get("number")
+
+    def __eq__(self, other):
+        if not isinstance(other, Version):
+            raise NotImplementedError()
+
+        return all([
+            self.id == other.id,
+            self.parent == other.parent,
+            self.facets == other.facets,
+            self.version == other.version,
+        ])
 
     def add_resource(self, name, resource_type, location):
         """Create resource with given params as child of this version
@@ -30,12 +38,13 @@ class Version(ChildWysObj):
         Returns:
             domain.Resource
         """
-        r = Resource(self.__conn, {
-            "parent": self.id,
-            "name": name,
-            "resourcetype": resource_type,
-            "location": location,
-        })
+        r = Resource(
+            self.__conn,
+            parent=self.id,
+            name=name,
+            resourcetype=resource_type,
+            location=location,
+        )
         r._id = self.__conn.create_resource(r)
         return r
 
@@ -113,24 +122,36 @@ class Version(ChildWysObj):
             result[link_name] = tmp
         return result
 
-    def link_to(self, name, item):
-        """Create link between two items
+    def _encode(self):
+        """
+
+        Returns:
+            dict
+        """
+        return {
+            "id": self.id,
+            "number": self.version,
+            "parent": self.parent,
+            "facets": self.facets,
+        }
+
+    def link_to(self, name, version):
+        """Create link between two versions
 
         Args:
             name (str):
-            item (domain.Version):
+            version (domain.Version):
 
         """
-        if not isinstance(item, self.__class__):
+        if not isinstance(version, self.__class__):
             return
 
         lnk = Link(
             self.__conn,
-            {
-                "src": self.id,
-                "dst": item.id,
-                "name": name,
-            }
+            src=self.id,
+            dst=version.id,
+            name=name,
+            facets={consts.FACET_LINK_TYPE: consts.VALUE_LINK_TYPE_VERSION},
         )
         self.__conn.create_link(lnk)
 
@@ -138,30 +159,21 @@ class Version(ChildWysObj):
         """Set this version as the published one"""
         self.__conn.publish_version(self.id)
 
-    def update_facets(self, facets):
+    def _update_facets(self, facets):
         """Set given key / value pairs in version facets
 
         Args:
             facets (dict):
 
         """
-        self._facets.update(facets)
         self.__conn.update_version_facets(
             self.id,
             facets
         )
 
     @property
-    def id(self):
-        return self._id
-
-    @property
     def version(self):
         return self._number
-
-    @property
-    def facets(self):
-        return copy.copy(self._facets)
 
     def _get_parent(self):
         """Return the parent item of this version
