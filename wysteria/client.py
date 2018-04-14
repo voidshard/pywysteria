@@ -1,11 +1,9 @@
 """
 
 """
-import ssl
-from copy import copy
-
 from wysteria.middleware import NatsMiddleware
-from wysteria.errors import UnknownMiddleware
+from wysteria import constants as consts
+from wysteria.errors import UnknownMiddlewareError
 from wysteria.domain import Collection, QueryDesc
 from wysteria.search import Search
 
@@ -15,29 +13,6 @@ _AVAILABLE_MIDDLEWARES = {
     _KEY_MIDDLEWARE_NATS: NatsMiddleware,
 }
 _DEFAULT_MIDDLEWARE = _KEY_MIDDLEWARE_NATS
-
-
-class TlsConfig(object):
-    """
-    Simple holder class for TLS information
-    """
-
-    __OPTS_SSL = [ssl.CERT_REQUIRED, ssl.CERT_NONE, ssl.CERT_OPTIONAL]
-
-    def __init__(self, keyfile=None, certfile=None, ca_certs=None, cert_reqs=ssl.CERT_REQUIRED):
-        if cert_reqs not in self.__OPTS_SSL:
-            raise ValueError("CertReq must be one of %s" % self.__OPTS_SSL)
-
-        self._opts = {
-            "ca_certs": ca_certs,
-            "keyfile": keyfile,
-            "certfile": certfile,
-            "cert_reqs": cert_reqs,
-        }
-
-    @property
-    def options(self):
-        return copy(self._opts)
 
 
 class Client(object):
@@ -55,34 +30,34 @@ class Client(object):
         Args:
             url (str):
             middleware (str): the name of an available middleware
+            tls: an ssl_ctx object (https://docs.python.org/3/library/ssl.html#context-creation)
         """
         cls = _AVAILABLE_MIDDLEWARES.get(middleware.lower())
         if not cls:
-            raise UnknownMiddleware("Unknown middleware '%s'" % middleware)
+            raise UnknownMiddlewareError("Unknown middleware '%s'" % middleware)
 
         self._conn = cls(**{"url": url, "tls": tls})
 
     def connect(self):
         """Connect to wysteria - used if you do not wish to use 'with'
         """
-        try:
-            self._conn.close()
-        except:
-            pass
         self._conn.connect()
 
     def close(self):
         """Disconnect from wysteria - used if you do not wish to use 'with'
         """
-        self._conn.close()
+        try:
+            self._conn.close()
+        except Exception:
+            pass  # prevent the middleware from raising when we call close on it
 
     def __enter__(self):
         """Connect to remote host(s)"""
-        self._conn.connect()
+        self.connect()
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         """Close connection(s) to remote host"""
-        self._conn.close()
+        self.close()
 
     def search(self):
         """Start a new search
@@ -121,7 +96,7 @@ class Client(object):
         Returns:
             domain.Collection
         """
-        c = Collection(self._conn, {"name": name})
+        c = Collection(self._conn, name=name, facets={consts.FACET_COLLECTION: "/"})
         c._id = self._conn.create_collection(c)
         return c
 
