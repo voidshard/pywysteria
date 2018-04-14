@@ -24,10 +24,8 @@ def main():
         # we can also add more facets after object creation so you can
         # search for custom fields. The idea is to keep these small, metadata,
         # tags and short strings.
-        forest_version.update_facets({
-            "publisher": "batman",
-        })
-        print "metadata added"
+        forest_version.update_facets(publisher="batman")
+        print("metadata added")
 
 
 if __name__ == "__main__":

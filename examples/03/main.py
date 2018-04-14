@@ -15,10 +15,10 @@ def main():
         search.params(item_type="tree", item_variant="oak")
 
         # find any & all matching items
-        print "Items of type 'tree' and variant 'oak'"
+        print("Items of type 'tree' and variant 'oak'")
         items = search.find_items()
         for item in items:
-            print item
+            print(item)
 
         # You can add more query params to find more matches at a time.
         # Better than doing lots of single queries if you can manage it.
@@ -28,19 +28,19 @@ def main():
         # build up a search query
         # This is understood as
         # (type "tree" AND variant oak) OR (type tree AND variant pine)
-        print "items of type tree and variant oak or pine"
+        print("items of type tree and variant oak or pine")
         search.params(item_type="tree", item_variant="oak")
         search.params(item_type="tree", item_variant="pine")
 
         # grab matching items
         items = search.find_items()
         for item in items:
-            print item
+            print(item)
 
         # All items!
-        print "Any item"
+        print("Any item")
         for item in client.search().find_items():
-            print item
+            print(item)
 
 
 if __name__ == "__main__":

@@ -1,28 +1,30 @@
 """
 Example09: TLS
 """
+import ssl
 
 import wysteria
-import ssl
+
+
+_key = "test.key"
+_cert = "test.crt"
+
+
+def ssl_context(key: str, cert: str, verify: bool=False):
+    """Simple func to create a ssl_context from the given key/cert files
+    """
+    purpose = ssl.Purpose.SERVER_AUTH if verify else ssl.Purpose.CLIENT_AUTH
+    tls = ssl.create_default_context(purpose=purpose)
+    tls.protocol = ssl.PROTOCOL_TLSv1_2
+    tls.load_cert_chain(certfile=cert, keyfile=key)
+    return tls
 
 
 def main():
-    client = wysteria.Client(tls=wysteria.TlsConfig(
-        ca_certs="/path/to/foo.ca.cert",
-        keyfile="/path/to/foo.key",
-        certfile="/path/to/foo.cert",
-        cert_reqs=ssl.CERT_REQUIRED,
-    ))
+    client = wysteria.Client(tls=ssl_context(_key, _cert))
     with client:
         tiles = client.get_collection("tiles")
-        print tiles
-
-    # Or a less secure route, with some homemade self-signed certs..
-    wysteria.Client(tls=wysteria.TlsConfig(
-        keyfile="/path/to/foo.key",
-        certfile="/path/to/foo.cert",
-        cert_reqs=ssl.CERT_NONE,
-    ))
+        print(tiles)
 
 
 if __name__ == "__main__":

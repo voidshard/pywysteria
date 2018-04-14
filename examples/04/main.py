@@ -25,15 +25,15 @@ def main():
         result = forest_version.get_linked()
 
         # if you recall, we made two links from forest01 both named "input"
-        print "All linked versions (link name: version)"
-        for link_name, versions in result.iteritems():
+        print("All linked versions (link name: version)")
+        for link_name, versions in result.items():
             for version in versions:
-                print link_name, version
+                print(link_name, version)
 
         # On the other hand, we could just request linked versions named "input"
-        print "linked 'input' versions"
+        print("linked 'input' versions")
         for version in forest_version.get_linked_by_name("input"):
-            print version
+            print(version)
 
 
 if __name__ == "__main__":

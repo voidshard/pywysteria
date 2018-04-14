@@ -36,15 +36,15 @@ def main():
         forest01.link_to("input", oak01)
         forest01.link_to("input", pine01)
 
-        print "--collections"
-        print forest
-        print tiles
-        print "--items--"
-        print oak
-        print pine
-        print "--versions--"
-        print oak01
-        print pine01
+        print("--collections")
+        print(forest)
+        print(tiles)
+        print("--items--")
+        print(oak)
+        print(pine)
+        print("--versions--")
+        print(oak01)
+        print(pine01)
 
 
 if __name__ == "__main__":
