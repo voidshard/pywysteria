@@ -1,6 +1,8 @@
 """
 
 """
+from copy import copy
+
 import wysteria.constants as consts
 from wysteria.domain.base import ChildWysObj
 from wysteria.domain.item import Item
@@ -35,7 +37,6 @@ class Collection(ChildWysObj):
             self.id == other.id,
             self.name == other.name,
             self.parent == other.parent,
-            self.facets == other.facets,
         ])
 
     @property
@@ -52,16 +53,23 @@ class Collection(ChildWysObj):
         """
         return self.__conn.delete_collection(self.id)
 
-    def create_collection(self, name: str):
+    def create_collection(self, name: str, facets: dict=None):
         """Create a sub collection of this collection
 
         Args:
             name (str): name of collection
+            facets (dict): default facets to set on new collection
 
         Returns:
             domain.Collection
         """
-        c = Collection(self.__conn, name=name, parent=self.id)
+        cfacets = copy(facets)
+        if not cfacets:
+            cfacets = {}
+
+        cfacets[consts.FACET_COLLECTION] = cfacets.get(consts.FACET_COLLECTION, self.name)
+
+        c = Collection(self.__conn, name=name, parent=self.id, facets=cfacets)
         c._id = self.__conn.create_collection(c)
         return c
 
@@ -101,20 +109,18 @@ class Collection(ChildWysObj):
         Returns:
             domain.Item
         """
-        if not facets:
-            facets = {}
+        cfacets = copy(facets)
+        if not cfacets:
+            cfacets = {}
 
-        required_facets = {
-            consts.FACET_COLLECTION: self.name,
-        }
-        facets.update(required_facets)
+        cfacets[consts.FACET_COLLECTION] = self.name
 
         i = Item(
             self.__conn,
             parent=self.id,
             itemtype=item_type,
             variant=variant,
-            facets=facets,
+            facets=cfacets,
         )
         i._id = self.__conn.create_item(i)
         return i

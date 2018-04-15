@@ -23,27 +23,56 @@ class Version(ChildWysObj):
         return all([
             self.id == other.id,
             self.parent == other.parent,
-            self.facets == other.facets,
             self.version == other.version,
         ])
 
-    def add_resource(self, name, resource_type, location):
+    @property
+    def _default_child_facets(self) -> dict:
+        """Returns some helpful default facets to set on child objects.
+
+        Returns:
+            dict
+        """
+        facets = {}
+        for k, v in (
+            (consts.FACET_COLLECTION, self.facets.get(consts.FACET_COLLECTION)),
+            (consts.FACET_ITEM_TYPE, self.facets.get(consts.FACET_ITEM_TYPE)),
+            (consts.FACET_ITEM_VARIANT, self.facets.get(consts.FACET_ITEM_VARIANT)),
+            ("version", "%s" % self.version),
+        ):
+            if not v:
+                continue
+
+            facets[k] = v
+        return facets
+
+    def delete(self):
+        """Delete this version."""
+        return self.__conn.delete_version(self.id)
+
+    def add_resource(self, name, resource_type, location, facets=None):
         """Create resource with given params as child of this version
 
         Args:
             name (str):
             resource_type (str):
             location (str):
+            facets (dict): set some initial facets
 
         Returns:
             domain.Resource
         """
+        cfacets = self._default_child_facets
+        if facets:
+            cfacets.update(facets)
+
         r = Resource(
             self.__conn,
             parent=self.id,
             name=name,
             resourcetype=resource_type,
             location=location,
+            facets=cfacets,
         )
         r._id = self.__conn.create_resource(r)
         return r
@@ -122,8 +151,8 @@ class Version(ChildWysObj):
             result[link_name] = tmp
         return result
 
-    def _encode(self):
-        """
+    def _encode(self) -> dict:
+        """Encode this as a JSONifiable dict
 
         Returns:
             dict
@@ -135,25 +164,36 @@ class Version(ChildWysObj):
             "facets": self.facets,
         }
 
-    def link_to(self, name, version):
+    def link_to(self, name, version, facets=None):
         """Create link between two versions
 
         Args:
             name (str):
             version (domain.Version):
+            facets (dict): some defaults facets to add to link
 
+        Raises:
+            ValueError if given version not of type Version
         """
         if not isinstance(version, self.__class__):
-            return
+            raise ValueError(
+                f"Expected Versiob to be of type Version, got {version.__class__.__name__}"
+            )
+
+        cfacets = self._default_child_facets
+        cfacets[consts.FACET_LINK_TYPE] = consts.VALUE_LINK_TYPE_VERSION
+        if facets:
+            cfacets.update(facets)
 
         lnk = Link(
             self.__conn,
             src=self.id,
             dst=version.id,
             name=name,
-            facets={consts.FACET_LINK_TYPE: consts.VALUE_LINK_TYPE_VERSION},
+            facets=cfacets,
         )
-        self.__conn.create_link(lnk)
+        lnk._id = self.__conn.create_link(lnk)
+        return lnk
 
     def publish(self):
         """Set this version as the published one"""
@@ -172,7 +212,12 @@ class Version(ChildWysObj):
         )
 
     @property
-    def version(self):
+    def version(self) -> int:
+        """Return the version number of this version
+
+        Returns:
+            int
+        """
         return self._number
 
     def _get_parent(self):

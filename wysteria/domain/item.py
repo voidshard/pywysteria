@@ -26,7 +26,6 @@ class Item(ChildWysObj):
             self.item_type == other.item_type,
             self.variant == other.variant,
             self.parent == other.parent,
-            self.facets == other.facets,
         ])
 
     def _encode(self) -> dict:
@@ -121,12 +120,13 @@ class Item(ChildWysObj):
             result[link_name] = tmp
         return result
 
-    def link_to(self, name: str, item) -> Link:
+    def link_to(self, name: str, item, facets: dict=None) -> Link:
         """Create link between two items
 
         Args:
             name (str):
             item (domain.Item):
+            facets (dict):
 
         Returns:
             Link
@@ -137,12 +137,17 @@ class Item(ChildWysObj):
         if not isinstance(item, self.__class__):
             raise ValueError(f"Expected item to be of type Item, got {item.__class__.__name__}")
 
+        cfacets = self._default_child_facets
+        cfacets[consts.FACET_LINK_TYPE] = consts.VALUE_LINK_TYPE_ITEM
+        if facets:
+            cfacets.update(facets)
+
         lnk = Link(
             self.__conn,
             src=self.id,
             dst=item.id,
             name=name,
-            facets={consts.FACET_LINK_TYPE: consts.VALUE_LINK_TYPE_ITEM}
+            facets=cfacets
         )
         lnk._id = self.__conn.create_link(lnk)
         return lnk
@@ -155,6 +160,19 @@ class Item(ChildWysObj):
         """
         self.__conn.update_item_facets(self.id, facets)
 
+    @property
+    def _default_child_facets(self) -> dict:
+        """Return default facets to set on child objects
+
+        Returns:
+            dict
+        """
+        return {
+            consts.FACET_COLLECTION: self.facets.get(consts.FACET_COLLECTION),
+            consts.FACET_ITEM_TYPE: self.item_type,
+            consts.FACET_ITEM_VARIANT: self.variant,
+        }
+
     def create_version(self, facets: dict=None) -> Version:
         """Create the next version obj for this item
 
@@ -164,21 +182,14 @@ class Item(ChildWysObj):
         Returns:
             domain.Version
         """
-        if not facets:
-            facets = {}
-
-        parent_facets = self.facets
-        required_facets = {
-            consts.FACET_COLLECTION: parent_facets.get(consts.FACET_COLLECTION),
-            consts.FACET_ITEM_TYPE: self.item_type,
-            consts.FACET_ITEM_VARIANT: self.variant,
-        }
-        facets.update(required_facets)
+        cfacets = self._default_child_facets
+        if facets:
+            cfacets.update(facets)
 
         v = Version(
             self.__conn,
             parent=self.id,
-            facets=facets
+            facets=cfacets
         )
 
         vid, vnum = self.__conn.create_version(v)

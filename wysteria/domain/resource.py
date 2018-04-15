@@ -25,19 +25,37 @@ class Resource(ChildWysObj):
             self.name == other.name,
             self.resource_type == other.resource_type,
             self.location == other.location,
-            self.facets == other.facets,
         ])
 
     @property
-    def resource_type(self):
+    def resource_type(self) -> str:
+        """Return the type of this resource
+
+        Returns:
+            str
+        """
         return self._resourcetype
 
+    def delete(self):
+        """Delete this resource."""
+        return self.__conn.delete_resource(self.id)
+
     @property
-    def name(self):
+    def name(self) -> str:
+        """Return the name of this resource
+
+        Returns:
+            str
+        """
         return self._name
 
     @property
-    def location(self):
+    def location(self) -> str:
+        """Return the location URI of this resource
+
+        Returns:
+            str
+        """
         return self._location
 
     def _get_parent(self):
@@ -53,8 +71,8 @@ class Resource(ChildWysObj):
             return results[0]
         return None
 
-    def _encode(self):
-        """
+    def _encode(self) -> dict:
+        """Encode this resource as a dict
 
         Returns:
             duct
@@ -68,5 +86,11 @@ class Resource(ChildWysObj):
             "facets": self.facets,
         }
 
-    def _update_facets(self, facets):
+    def _update_facets(self, facets: dict):
+        """Update this resource facets with the given facets
+
+        Args:
+            facets (dict):
+
+        """
         self.__conn.update_resource_facets(self.id, facets)

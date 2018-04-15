@@ -21,7 +21,6 @@ class Link(WysBaseObj):
             self.name == other.name,
             self.source == other.source,
             self.destination == other.destination,
-            self.facets == other.facets,
         ])
 
     def _encode(self) -> dict:
@@ -44,15 +43,6 @@ class Link(WysBaseObj):
             facets: dict
         """
         self.__conn.update_link_facets(self.id, facets)
-
-    @property
-    def id(self) -> str:
-        """Return the ID of this link
-
-        Returns:
-            str
-        """
-        return self._id
 
     @property
     def name(self) -> str:

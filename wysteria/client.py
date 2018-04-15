@@ -1,6 +1,8 @@
 """
 
 """
+from copy import copy
+
 from wysteria.middleware import NatsMiddleware
 from wysteria import constants as consts
 from wysteria.errors import UnknownMiddlewareError
@@ -68,7 +70,7 @@ class Client(object):
         return Search(self._conn)
 
     @property
-    def default_middleware(self):
+    def default_middleware(self) -> str:
         """Return the default middleware name
 
         Returns:
@@ -77,26 +79,33 @@ class Client(object):
         return _DEFAULT_MIDDLEWARE
 
     @staticmethod
-    def available_middleware():
+    def available_middleware() -> list:
         """Return a list of the available middleware
 
         Returns:
             []str
         """
-        return _AVAILABLE_MIDDLEWARES.keys()
+        return list(_AVAILABLE_MIDDLEWARES.keys())
 
-    def create_collection(self, name):
+    def create_collection(self, name: str, facets: dict=None):
         """Create a collection with the given name.
 
         Note: Only one collection is allowed with a given name.
 
         Args:
             name (str): name for new collection
+            facets (dict): facets to set on new collection
 
         Returns:
             domain.Collection
         """
-        c = Collection(self._conn, name=name, facets={consts.FACET_COLLECTION: "/"})
+        cfacets = copy(facets)
+        if not cfacets:
+            cfacets = {}
+
+        cfacets[consts.FACET_COLLECTION] = cfacets.get(consts.FACET_COLLECTION, "/")
+
+        c = Collection(self._conn, name=name, facets=cfacets)
         c._id = self._conn.create_collection(c)
         return c
 
