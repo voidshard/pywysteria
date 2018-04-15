@@ -1,5 +1,14 @@
 #!/bin/bash
 
+#
+# Integration test suite launcher.
+#
+# You'll want to make sure you build the appropriate docker images first (build scripts are in
+# (the main Go repo) wysteria/docker/images/
+#
+# These tests explicitly check network functions & compatibility with the server build(s).
+#
+
 # set fail on error
 set -eu
 
