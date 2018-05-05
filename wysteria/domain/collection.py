@@ -24,6 +24,7 @@ class Collection(ChildWysObj):
         """
         return {
             "id": self.id,
+            "uri": self._uri,
             "name": self.name,
             "parent": self._parent,
             "facets": self.facets,
@@ -38,6 +39,17 @@ class Collection(ChildWysObj):
             self.name == other.name,
             self.parent == other.parent,
         ])
+
+    def _fetch_uri(self) -> str:
+        """Fetch uri from remote server.
+
+        Returns:
+            str
+        """
+        result = self.__conn.find_collections([QueryDesc().id(self.id)], limit=1)
+        if result:
+            return result[0].uri
+        return ""
 
     @property
     def name(self) -> str:

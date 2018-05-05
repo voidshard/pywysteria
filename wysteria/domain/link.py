@@ -2,6 +2,7 @@
 
 """
 from wysteria.domain.base import WysBaseObj
+from wysteria.domain.query_desc import QueryDesc
 
 
 class Link(WysBaseObj):
@@ -32,9 +33,21 @@ class Link(WysBaseObj):
         return {
             "name": self.name,
             "src": self.source,
+            "uri": self._uri,
             "dst": self.destination,
             "facets": self.facets,
         }
+
+    def _fetch_uri(self) -> str:
+        """Fetch uri from remote server.
+
+        Returns:
+            str
+        """
+        result = self.__conn.find_links([QueryDesc().id(self.id)], limit=1)
+        if result:
+            return result[0].uri
+        return ""
 
     def _update_facets(self, facets: dict):
         """Call wysteria to update this link with the given facets

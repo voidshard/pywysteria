@@ -210,6 +210,8 @@ class TestLink:
         assert lnk == remote
         assert lnk.destination == remote.destination == self.item2.id
         assert lnk.source == remote.source == self.item1.id
+        assert lnk.id
+        assert lnk.uri
         for k, v in facets.items():
             assert lnk.facets[k] == v
             assert remote.facets[k] == v

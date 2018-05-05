@@ -285,6 +285,10 @@ class TestItem:
         assert item
         assert ritem
         assert item == ritem
+        assert item.id
+        assert ritem.id
+        assert item.uri
+        assert ritem.uri
         for k, v in facets.items():
             assert item.facets[k] == v
             assert ritem.facets[k] == v

@@ -9,6 +9,7 @@ class WysBaseObj(metaclass=abc.ABCMeta):
 
     def __init__(self, **kwargs):
         self._id = kwargs.get("id", "")
+        self._uri = kwargs.get("uri", "")
         self._facets = kwargs.get("facets", {})
 
     def encode(self) -> dict:
@@ -36,6 +37,35 @@ class WysBaseObj(metaclass=abc.ABCMeta):
             str
         """
         return self._id
+
+    @abc.abstractmethod
+    def _fetch_uri(self) -> str:
+        """Fetch uri from remote server.
+
+        Returns:
+            str
+        """
+        # Nb. This property is the only one we don't know on creation as it's determined on the
+        # server and isn't auto returned.
+        pass
+
+    @property
+    def uri(self) -> str:
+        """Return the unique URI for this object.
+
+        Returns:
+            str
+
+        Raises:
+            ValueError if the URI cannot be found / constructed
+        """
+        if not self._uri:
+            self._uri = self._fetch_uri()
+
+        if not self._uri:
+            raise ValueError("Unable to fetch URI")
+
+        return self._uri
 
     @property
     def facets(self) -> dict:

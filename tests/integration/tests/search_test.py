@@ -71,6 +71,61 @@ class TestSearch:
         for r in expected:
             assert r in all_results
 
+    @staticmethod
+    def _perform_uri_search_test(fn, expected):
+        # act
+        result = fn(limit=10)
+
+        # assert
+        assert len(result) == 1
+        assert result[0].uri == expected.uri
+        assert result[0] == expected
+
+    def test_uri_search_collection(self):
+        # arrange
+        expected = self.collection1
+        s = self.client.search()
+        s.params(uri=expected.uri)
+
+        # act
+        self._perform_uri_search_test(s.find_collections, expected)
+
+    def test_uri_search_item(self):
+        # arrange
+        expected = self.item1
+        s = self.client.search()
+        s.params(uri=expected.uri)
+
+        # act
+        self._perform_uri_search_test(s.find_items, expected)
+
+    def test_uri_search_versions(self):
+        # arrange
+        expected = self.version1
+        s = self.client.search()
+        s.params(uri=expected.uri)
+
+        # act
+        self._perform_uri_search_test(s.find_versions, expected)
+
+    def test_uri_search_resources(self):
+        # arrange
+        expected = self.resource1
+        s = self.client.search()
+        s.params(uri=expected.uri)
+
+        # act
+        self._perform_uri_search_test(s.find_resources, expected)
+
+    def test_uri_search_links(self):
+        # arrange
+        expected = self.link1
+        s = self.client.search()
+        s.params(uri=expected.uri)
+
+        # act
+        self._perform_uri_search_test(s.find_links, expected)
+
     def test_facet_search(self):
         # arrange
         s = self.client.search()

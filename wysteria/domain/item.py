@@ -36,11 +36,23 @@ class Item(ChildWysObj):
         """
         return {
             "id": self.id,
+            "uri": self._uri,
             "parent": self._parent,
             "facets": self.facets,
             "itemtype": self._itemtype,
             "variant": self._variant,
         }
+
+    def _fetch_uri(self) -> str:
+        """Fetch uri from remote server.
+
+        Returns:
+            str
+        """
+        result = self.__conn.find_items([QueryDesc().id(self.id)], limit=1)
+        if result:
+            return result[0].uri
+        return ""
 
     @property
     def item_type(self) -> str:

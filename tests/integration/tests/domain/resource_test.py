@@ -124,6 +124,10 @@ class TestResource:
         assert name == remote.name == resource.name
         assert location == remote.location == resource.location
         assert type_ == remote.resource_type == resource.resource_type
+        assert resource.id
+        assert resource.uri
+        assert remote.id
+        assert remote.uri
         for k, v in facets.items():
             assert resource.facets[k] == v
             assert remote.facets[k] == v

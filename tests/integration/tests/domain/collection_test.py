@@ -159,6 +159,7 @@ class TestCollection:
             assert r
             assert r.name == name
             assert r.id
+            assert r.uri
             assert r.facets
 
         assert rresult == lresult

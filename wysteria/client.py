@@ -121,8 +121,9 @@ class Client(object):
         result = self._conn.find_collections([
             QueryDesc().id(identifier),
             QueryDesc().name(identifier),
-        ], limit=1)
-        if not result:
+            QueryDesc().uri(identifier),
+        ], limit=2)
+        if (not result) or len(result) > 1:
             return None
         return result[0]
 

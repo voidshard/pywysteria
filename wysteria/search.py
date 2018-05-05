@@ -13,6 +13,7 @@ class Search(object):
     def params(
             self,
             id: str="",
+            uri: str="",
             name: str="",
             parent: str="",
             version_number: int=0,
@@ -34,6 +35,7 @@ class Search(object):
 
         Args:
             id (str):
+            uri (str):
             name (str):
             parent (str):
             version_number (int):
@@ -53,6 +55,7 @@ class Search(object):
 
         qd = QueryDesc()\
             .id(id)\
+            .uri(uri)\
             .name(name)\
             .parent(parent)\
             .version_number(version_number)\

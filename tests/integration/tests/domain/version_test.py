@@ -147,6 +147,10 @@ class TestVersion:
         assert version
         assert remote
         assert version == remote
+        assert version.id
+        assert version.uri
+        assert remote.id
+        assert remote.uri
         for k, v in facets.items():
             assert version.facets[k] == v
             assert remote.facets[k] == v

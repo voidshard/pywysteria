@@ -71,6 +71,17 @@ class Resource(ChildWysObj):
             return results[0]
         return None
 
+    def _fetch_uri(self) -> str:
+        """Fetch uri from remote server.
+
+        Returns:
+            str
+        """
+        result = self.__conn.find_resources([QueryDesc().id(self.id)], limit=1)
+        if result:
+            return result[0].uri
+        return ""
+
     def _encode(self) -> dict:
         """Encode this resource as a dict
 
@@ -79,6 +90,7 @@ class Resource(ChildWysObj):
         """
         return {
             "id": self.id,
+            "uri": self._uri,
             "parent": self.parent,
             "name": self.name,
             "resourcetype": self.resource_type,

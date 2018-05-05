@@ -21,6 +21,7 @@ class QueryDesc:
     """
     def __init__(self):
         self._id = ""
+        self._uri = ""
         self._parent = ""
         self._versionnumber = 0
         self._itemtype = ""
@@ -44,6 +45,7 @@ class QueryDesc:
         """
         return any([
             self._id,
+            self._uri,
             self._parent,
             self._versionnumber,
             self._itemtype,
@@ -64,6 +66,7 @@ class QueryDesc:
         """
         return {
             "id": self._id,
+            "uri": self._uri,
             "parent": self._parent,
             "versionnumber": self._versionnumber,
             "itemtype": self._itemtype,
@@ -86,6 +89,18 @@ class QueryDesc:
             self
         """
         self._id = val
+        return self
+
+    def uri(self, val: str):
+        """Match on object by it's Uri.
+
+        Args:
+            val: an Id to match on
+
+        Returns:
+            self
+        """
+        self._uri = val
         return self
 
     def parent(self, val: str):

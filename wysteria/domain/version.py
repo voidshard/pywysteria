@@ -151,6 +151,17 @@ class Version(ChildWysObj):
             result[link_name] = tmp
         return result
 
+    def _fetch_uri(self) -> str:
+        """Fetch uri from remote server.
+
+        Returns:
+            str
+        """
+        result = self.__conn.find_versions([QueryDesc().id(self.id)], limit=1)
+        if result:
+            return result[0].uri
+        return ""
+
     def _encode(self) -> dict:
         """Encode this as a JSONifiable dict
 
@@ -159,6 +170,7 @@ class Version(ChildWysObj):
         """
         return {
             "id": self.id,
+            "uri": self._uri,
             "number": self.version,
             "parent": self.parent,
             "facets": self.facets,
