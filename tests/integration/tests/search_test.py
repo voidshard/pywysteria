@@ -1,4 +1,3 @@
-from copy import copy
 import uuid
 
 import wysteria
@@ -18,7 +17,7 @@ class TestSearch:
 
     @classmethod
     def setup_class(cls):
-        cls.client = wysteria.Client()
+        cls.client = wysteria.default_client()
         cls.client.connect()
 
         cls.common_facets = {

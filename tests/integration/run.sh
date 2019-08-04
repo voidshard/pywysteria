@@ -4,7 +4,7 @@
 # Integration test suite launcher.
 #
 # You'll want to make sure you build the appropriate docker images first (build scripts are in
-# (the main Go repo) wysteria/docker/images/
+# the main Go repo) wysteria/docker/images/
 #
 # These tests explicitly check network functions & compatibility with the server build(s).
 #
@@ -52,4 +52,8 @@ dotest () {
 
 
 # ------------------ start
-dotest "local_wysteria"
+export WYSTERIA_CLIENT_INI=test-nats.ini
+dotest "local_wysteria_nats"
+
+export WYSTERIA_CLIENT_INI=test-grpc.ini
+dotest "local_wysteria_grpc"

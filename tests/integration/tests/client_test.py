@@ -17,7 +17,7 @@ class TestClient:
 
     @classmethod
     def setup_class(cls):
-        cls.client = wysteria.Client()
+        cls.client = wysteria.default_client()
         cls.client.connect()
 
     @classmethod

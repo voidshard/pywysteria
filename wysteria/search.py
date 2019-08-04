@@ -68,6 +68,7 @@ class Search(object):
             .link_destination(link_destination)
 
         self._query.append(qd)
+        return self
 
     def _generic_run_query(self, find_func, limit: int, offset: int):
         """Run the built query and return matching collections

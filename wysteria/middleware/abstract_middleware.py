@@ -1,5 +1,8 @@
 import abc
 
+from wysteria import constants as consts
+from wysteria import errors
+
 
 class WysteriaConnectionBase(metaclass=abc.ABCMeta):
     """
@@ -8,6 +11,35 @@ class WysteriaConnectionBase(metaclass=abc.ABCMeta):
     Pretty much a python clone of the wysteria/common/middleware client
     interface. Valid python clients should subclass from this.
     """
+
+    @staticmethod
+    def translate_server_exception(msg):
+        """Turn a wysteria error string into a python exception.
+
+        Args:
+            msg: error string from wysteria
+
+        Raises:
+            AlreadyExistsError
+            NotFoundError
+            InvalidInputError
+            IllegalOperationError
+            ServerUnavailableError
+            Exception
+        """
+        if consts.ERR_ALREADY_EXISTS in msg:
+            raise errors.AlreadyExistsError(msg)
+        elif consts.ERR_NOT_FOUND in msg:
+            raise errors.NotFoundError(msg)
+        elif consts.ERR_ILLEGAL in msg:
+            raise errors.IllegalOperationError(msg)
+        elif any([consts.ERR_INVALID in msg, "ffjson error" in msg]):
+            raise errors.InvalidInputError(msg)
+        elif consts.ERR_NOT_SERVING in msg:
+            raise errors.ServerUnavailableError(msg)
+
+        # something very unexpected happened
+        raise Exception(msg)
 
     @abc.abstractmethod
     def connect(self):

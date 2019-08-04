@@ -10,3 +10,9 @@ VALUE_LINK_TYPE_VERSION = "version"
 
 # A default for the 'limit' field send to wysteria on a search request.
 DEFAULT_QUERY_LIMIT = 500
+
+ERR_ALREADY_EXISTS = "already-exists"
+ERR_INVALID = "invalid-input"
+ERR_ILLEGAL = "illegal-operation"
+ERR_NOT_FOUND = "not-found"
+ERR_NOT_SERVING = "operation-rejected"

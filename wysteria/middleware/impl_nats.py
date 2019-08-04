@@ -43,15 +43,27 @@ _KEY_UPDATE_VERSION = _CLIENT_ROUTE % "uv"
 _KEY_UPDATE_RESOURCE = _CLIENT_ROUTE % "ur"
 _KEY_UPDATE_LINK = _CLIENT_ROUTE % "ul"
 
-_ERR_ALREADY_EXISTS = "already-exists"
-_ERR_INVALID = "invalid-input"
-_ERR_ILLEGAL = "illegal-operation"
-_ERR_NOT_FOUND = "not-found"
-_ERR_NOT_SERVING = "operation-rejected"
-
 
 NATS_MSG_RETRIES = 3
 _NATS_MIN_TIMEOUT = 2  # seconds, chosen by experimentation
+
+
+def _load_ssl_context(key, cert, verify=False):
+    """Util func to load an ssl context.
+
+    Args:
+        key (str): path to file
+        cert (str): path to file
+        verify (bool): if true, we'll verify the server's certs
+
+    Returns:
+        ssl_context
+    """
+    purpose = ssl.Purpose.SERVER_AUTH if verify else ssl.Purpose.CLIENT_AUTH
+    tls = ssl.create_default_context(purpose=purpose)
+    tls.protocol = ssl.PROTOCOL_TLSv1_2
+    tls.load_cert_chain(certfile=cert, keyfile=key)
+    return tls
 
 
 def _retry(func):
@@ -70,7 +82,7 @@ def _retry(func):
         for count in range(0, NATS_MSG_RETRIES + 1):
             try:
                 return func(*args, **kwargs)
-            except (errors.RequestTimeoutError, queue.Empty) as e:
+            except (errors.RequestTimeoutError, queue.Empty):
                 if count >= NATS_MSG_RETRIES:
                     raise
     return retry_func
@@ -207,11 +219,12 @@ class _AsyncIONats(threading.Thread):
             pass
 
 
-class WysteriaNatsMiddleware(WysteriaConnectionBase):
+class NatsMiddleware(WysteriaConnectionBase):
     """Wysteria middleware client using Nats.io to manage transport
 
     Using python nats client (copied & modified in libs/ dir)
     https://github.com/jackytu/python-nats/blob/master/nats/client.py
+
     """
     def __init__(self, url: str=None, tls=None):
         """Construct new client
@@ -225,7 +238,12 @@ class WysteriaNatsMiddleware(WysteriaConnectionBase):
         if not url:
             url = _DEFAULT_URI
 
-        self._conn = _AsyncIONats(url, tls)
+        ssl_context = None
+        if tls:
+            if tls.enable:
+                ssl_context = _load_ssl_context(tls.key, tls.cert, verify=tls.verify)
+
+        self._conn = _AsyncIONats(url, ssl_context)
 
     def connect(self):
         """Connect to remote host(s)
@@ -633,37 +651,9 @@ class WysteriaNatsMiddleware(WysteriaConnectionBase):
 
         err_msg = reply.get("Error")
         if err_msg:
-            self._translate_server_exception(err_msg)
+            self.translate_server_exception(err_msg)
 
         return reply.get("Id")
-
-    def _translate_server_exception(self, msg):
-        """Turn a wysteria error string into a python exception.
-
-        Args:
-            msg: error string from wysteria
-
-        Raises:
-            AlreadyExistsError
-            NotFoundError
-            InvalidInputError
-            IllegalOperationError
-            ServerUnavailableError
-            Exception
-        """
-        if _ERR_ALREADY_EXISTS in msg:
-            raise errors.AlreadyExistsError(msg)
-        elif _ERR_NOT_FOUND in msg:
-            raise errors.NotFoundError(msg)
-        elif _ERR_ILLEGAL in msg:
-            raise errors.IllegalOperationError(msg)
-        elif any([_ERR_INVALID in msg, "ffjson error" in msg]):
-            raise errors.InvalidInputError(msg)
-        elif _ERR_NOT_SERVING in msg:
-            raise errors.ServerUnavailableError(msg)
-
-        # something very unexpected happened
-        raise Exception(msg)
 
     def create_collection(self, collection: domain.Collection):
         """Create collection with given name, return ID of new collection
@@ -744,7 +734,7 @@ class WysteriaNatsMiddleware(WysteriaConnectionBase):
 
         err_msg = reply.get("Error")
         if err_msg:
-            self._translate_server_exception(err_msg)
+            self.translate_server_exception(err_msg)
 
         return reply.get("Id"), reply.get("Version")
 
@@ -823,7 +813,7 @@ class WysteriaNatsMiddleware(WysteriaConnectionBase):
 
         err_msg = reply.get("Error")
         if err_msg:
-            self._translate_server_exception(err_msg)
+            self.translate_server_exception(err_msg)
 
     def delete_collection(self, oid: str):
         """Delete the matching obj type with the given id

@@ -18,7 +18,7 @@ class TestLink:
 
     @classmethod
     def setup_class(cls):
-        cls.client = wysteria.Client()
+        cls.client = wysteria.default_client()
         cls.client.connect()
         cls.collection = cls.client.create_collection(_rs())
         cls.item1 = cls.collection.create_item(_rs(), _rs())

@@ -11,6 +11,12 @@ abstract_middleware.py
 impl_nats.py
     A Nats.io implementation of the abstract middleware class.
 
+impl_grpc.py
+    A gRPC implementation of the the middleware class
+
+wgrpc/
+    Auto generated files for gRPC by protobuf.
+
 
 Exported
 --------
@@ -18,12 +24,18 @@ Exported
   NatsMiddleware
     A Nats.io implementation of the abstract middleware class
 
+  GRPCMiddleware
+    A gRPC implementation of the the middleware class
+
+
 
 """
 
-from wysteria.middleware.impl_nats import WysteriaNatsMiddleware as NatsMiddleware
+from wysteria.middleware.impl_nats import NatsMiddleware
+from wysteria.middleware.impl_grpc import GRPCMiddleware
 
 
 __all__ = [
     "NatsMiddleware",
+    "GRPCMiddleware",
 ]

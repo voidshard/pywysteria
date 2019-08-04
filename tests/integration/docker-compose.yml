@@ -1,7 +1,6 @@
 version: "3"
 services:
-  local_wysteria:
-    # wysteria using all embedded settings w/ embedded nats middleware
+  local_wysteria_nats:
     image: wysteria/wysteria:local
     ports:
       - "4222:4222"
@@ -12,6 +11,21 @@ services:
       WYS_DATABASE_NAME: "data"
       WYS_MIDDLEWARE_DRIVER: "nats"
       WYS_MIDDLEWARE_CONFIG: ""
+      WYS_MIDDLEWARE_SSL_CERT: ""
+      WYS_MIDDLEWARE_SSL_KEY: ""
+      WYS_MIDDLEWARE_SSL_VERIFY: "false"
+      WYS_MIDDLEWARE_SSL_ENABLE: "false"
+  local_wysteria_grpc:
+    image: wysteria/wysteria:local
+    ports:
+      - "31000:31000"
+    environment:
+      WYS_SEARCHBASE_DRIVER: "bleve"
+      WYS_SEARCHBASE_NAME: "searchdata"
+      WYS_DATABASE_DRIVER: "bolt"
+      WYS_DATABASE_NAME: "data"
+      WYS_MIDDLEWARE_DRIVER: "grpc"
+      WYS_MIDDLEWARE_CONFIG: ":31000"
       WYS_MIDDLEWARE_SSL_CERT: ""
       WYS_MIDDLEWARE_SSL_KEY: ""
       WYS_MIDDLEWARE_SSL_VERIFY: "false"

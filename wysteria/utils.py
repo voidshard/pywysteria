@@ -1,6 +1,6 @@
 import os
-import ssl
 import configparser
+from collections import namedtuple
 
 from wysteria.client import Client
 
@@ -13,8 +13,14 @@ _KEY_MWARE_DRIVER = "driver"
 _KEY_MWARE_CONF = "config"
 _KEY_MWARE_SSL_CERT = "sslcert"
 _KEY_MWARE_SSL_KEY = "sslkey"
-_KEY_MWARE_SSL_VERIFY = "SSLVerify"
+_KEY_MWARE_SSL_PEM = "sslpem"
+_KEY_MWARE_SSL_VERIFY = "sslverify"
 _KEY_MWARE_SSL_ENABLE = "sslenabletls"
+
+
+_SSLConfig = namedtuple("SSLConfig", [
+    "key", "cert", "pem", "verify", "enable",
+])
 
 
 def _wysteria_config() -> str:
@@ -51,24 +57,6 @@ def _read_config(configpath: str) -> dict:
     return data
 
 
-def _load_ssl_context(key, cert, verify=False):
-    """Util func to load an ssl context.
-
-    Args:
-        key (str): path to file
-        cert (str): path to file
-        verify (bool): if true, we'll verify the server's certs
-
-    Returns:
-        ssl_context
-    """
-    purpose = ssl.Purpose.SERVER_AUTH if verify else ssl.Purpose.CLIENT_AUTH
-    tls = ssl.create_default_context(purpose=purpose)
-    tls.protocol = ssl.PROTOCOL_TLSv1_2
-    tls.load_cert_chain(certfile=cert, keyfile=key)
-    return tls
-
-
 def from_config(configpath: str) -> Client:
     """Build a wysteria Client from a given config file.
 
@@ -81,14 +69,13 @@ def from_config(configpath: str) -> Client:
     data = _read_config(configpath)
     middleware = data.get(_KEY_MWARE, {})
 
-    tls = None
-
-    if middleware.get(_KEY_MWARE_SSL_ENABLE, False):
-        tls = _load_ssl_context(
-            middleware.get(_KEY_MWARE_SSL_KEY),
-            middleware.get(_KEY_MWARE_SSL_CERT),
-            middleware.get(_KEY_MWARE_SSL_VERIFY, False)
-        )
+    tls = _SSLConfig(
+        middleware.get(_KEY_MWARE_SSL_KEY),
+        middleware.get(_KEY_MWARE_SSL_CERT),
+        middleware.get(_KEY_MWARE_SSL_PEM),
+        middleware.get(_KEY_MWARE_SSL_VERIFY, "false") == 'true',
+        middleware.get(_KEY_MWARE_SSL_ENABLE, "false") == 'true',
+    )
 
     return Client(
         url=middleware.get(_KEY_MWARE_CONF),
